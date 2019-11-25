@@ -1,0 +1,37 @@
+{
+  "name": "linkedin-jobs-scraper",
+  "version": "1.0.0",
+  "description": "Scrape public available job offers on Linkedin using headless browser",
+  "main": "index.js",
+  "scripts": {
+    "example": "DEBUG=scraper:* node examples/example1.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/revyTH/linkedin-jobs-scraper.git"
+  },
+  "bugs": {
+    "url": "https://github.com/revyTH/linkedin-jobs-scraper.git/issues"
+  },
+  "homepage": "https://github.com/revyTH/linkedin-jobs-scraper.git#readme",
+  "author": "Ludovico Fabbri",
+  "license": "ISC",
+  "dependencies": {
+    "debug": "^4.1.1",
+    "puppeteer": "^2.0.0"
+  },
+  "keywords": [
+    "scraper",
+    "crawler",
+    "Linkedin",
+    "jobs",
+    "puppeteer",
+    "headless",
+    "chromium",
+    "text",
+    "text-mining",
+    "data-mining",
+    "machine-learning",
+    "selenium"
+  ]
+}

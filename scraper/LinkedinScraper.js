@@ -186,16 +186,34 @@ class LinkedinScraper extends EventEmitter {
      * Do not use directly. Use run instead.
      * @param queries Array[String] of queries
      * @param locations Array[String] of locations
-     * @param paginationMax Number
+     * @param [paginationMax] {Number}
+     * @param [descriptionProcessor] {Function} Custom function to extract job description on browser side
      * @returns {Promise<void>}
      * @private
      */
     async _run(
-        queries = ["Developer"],
-        locations = ["United States"],
-        paginationMax = 10,
+        queries,
+        locations,
+        paginationMax,
+        descriptionProcessor
     ) {
         let tag = `[LI_SCRAPER]`;
+
+        if (!(typeof(queries) === "string" || Array.isArray(queries))) {
+            throw new Error(`'queries' parameter must be string or Array`);
+        }
+
+        if (!(typeof(locations) === "string" || Array.isArray(locations))) {
+            throw new Error(`'locations' parameter must be string or Array`);
+        }
+
+        if (!(Number.isInteger(paginationMax) && paginationMax > 0)) {
+            throw new Error(`'paginationMax' must be a positive integer`);
+        }
+
+        if (descriptionProcessor && typeof(descriptionProcessor) !== "function") {
+            throw new Error(`'descriptionProcessor' must be a function`)
+        }
 
         if (!Array.isArray(queries) && typeof(queries) === "string") {
             queries = [queries];
@@ -330,7 +348,7 @@ class LinkedinScraper extends EventEmitter {
                         jobIndex
                     );
 
-                    // Try loading job; skip in case of error
+                    // Try to load job; skip in case of error
                     try {
                         [[jobId, jobLink]] = await Promise.all([
                             page.evaluate((linksSelector, jobIndex) => {
@@ -349,25 +367,38 @@ class LinkedinScraper extends EventEmitter {
                         ]);
                     }
                     catch(err) {
-                        err.message = tag + "\t" +err.message;
+                        err.message = tag + "\t" + err.message;
                         this.emit(events.custom.error, err);
                         continue;
                     }
 
-                    // Extract job description data
-                    jobDescription = await page.evaluate(
-                        (
-                            descriptionSelector,
-                        ) => {
-                            return document.querySelector(descriptionSelector).innerText;
-                        },
-                        descriptionSelector
-                    );
+                    // Try to extract job description
+                    try {
+                        // Use custom processor if available
+                        if (descriptionProcessor) {
+                            jobDescription = await page.evaluate(`(${descriptionProcessor.toString()})();`)
+                        }
+                        else {
+                            jobDescription = await page.evaluate(
+                                (
+                                    descriptionSelector,
+                                ) => {
+                                    return document.querySelector(descriptionSelector).innerText;
+                                },
+                                descriptionSelector
+                            );
+                        }
+                    }
+                    catch(err) {
+                        err.message = tag + "\t" + err.message;
+                        this.emit(events.custom.error, err);
+                        continue;
+                    }
 
-                    // Scroll down page; skip in case of error
-                    await page.evaluate(_ => {
-                        window.scrollTo(0, document.body.scrollHeight)
-                    });
+                    // // Scroll down page; skip in case of error
+                    // await page.evaluate(_ => {
+                    //     window.scrollTo(0, document.body.scrollHeight)
+                    // });
 
                     // Emit data
                     this.emit(events.custom.data, {
@@ -419,13 +450,20 @@ class LinkedinScraper extends EventEmitter {
      * Scrape linkedin jobs
      * @param queries Array[String] of queries
      * @param locations Array[String] of locations
-     * @param paginationMax Number Max number of pagination
+     * @param [paginationMax] {Number} Max number of pagination
+     * @param [descriptionProcessor] {Function} Custom function to extract job description on browser side
      * @returns {Promise<void>}
      */
     async run(
-        queries = ["Developer"],
-        locations = ["United States"],
-        { paginationMax, } = { paginationMax: 10, },
+        queries,
+        locations,
+        {
+            paginationMax,
+            descriptionProcessor,
+        } = {
+            paginationMax: 10,
+            descriptionProcessor: null,
+        },
     ) {
         try {
             if (this.state === states.notInitialized) {
@@ -450,6 +488,7 @@ class LinkedinScraper extends EventEmitter {
                 queries,
                 locations,
                 paginationMax,
+                descriptionProcessor
             );
         }
         catch (err) {

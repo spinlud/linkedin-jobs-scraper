@@ -2,7 +2,6 @@
 > Scrape public available job offers on Linkedin using headless browser (account credentials are not required).
 > It is possible to run different queries on different locations concurrently. 
 > For each job offer the following data fields are extracted: `title`, `company`, `place`, `link`, `description`.
-> Job description is returned raw without any processing.    
 
 ## Table of Contents
 

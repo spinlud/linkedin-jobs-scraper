@@ -110,7 +110,7 @@ Each `LinkedinScraper` instance is associated with one browser (Chromium) instan
 /**
  * Constructor
  * @extends EventEmitter
- * @param options Puppeteer browser options, for more informations see https://pptr.dev/#?product=Puppeteer&version=v2.0.0&show=api-puppeteerlaunchoptions
+ * @param options {Object} Puppeteer browser options, for more informations see https://pptr.dev/#?product=Puppeteer&version=v2.0.0&show=api-puppeteerlaunchoptions
  */
 constructor(options) { }
 

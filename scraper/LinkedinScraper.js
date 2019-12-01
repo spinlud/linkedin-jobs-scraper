@@ -112,7 +112,10 @@ const _loadMoreJobs = async (
 }
 
 /**
- * LinkedinScraper class
+ * Main class
+ * @extends EventEmitter
+ * @param options {Object} Puppeteer browser options, for more informations see https://pptr.dev/#?product=Puppeteer&version=v2.0.0&show=api-puppeteerlaunchoptions
+ * @constructor
  */
 function LinkedinScraper(options) {
     const _options = options;

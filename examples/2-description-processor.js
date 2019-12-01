@@ -4,24 +4,21 @@ const { LinkedinScraper, events, } = require("../index");
     // Programatically disable logger
     setTimeout(() => LinkedinScraper.disableLogger(), 2000);
 
-    // Each scraper instance is associated with one browser.
-    // Concurrent queries will be runned on different pages within the same browser instance.
     const scraper = new LinkedinScraper({
         headless: true,
         slowMo: 10,
     });
 
-    // Listen for custom events
     scraper.on(events.custom.data, ({ query, location, link, title, company, place, description, }) => {
         console.log(description);
     });
 
+    // Custom function executed on browser side to extract job description
     const descriptionProcessor = () => document.querySelector(".description__text")
         .innerText
         .replace(/[\s\n\r]+/g, " ")
         .trim();
 
-    // Run queries concurrently
     await Promise.all([
         scraper.run(
             "Node.js",
@@ -33,6 +30,5 @@ const { LinkedinScraper, events, } = require("../index");
         ),
     ]);
 
-    // Close browser
     await scraper.close();
 })();

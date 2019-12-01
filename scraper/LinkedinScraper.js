@@ -1,3 +1,4 @@
+const { inherits, }  = require("util");
 const { EventEmitter, } = require("events");
 const puppeteer = require("puppeteer");
 const events = require("./events");
@@ -113,33 +114,20 @@ const _loadMoreJobs = async (
 /**
  * LinkedinScraper class
  */
-class LinkedinScraper extends EventEmitter {
-    /**
-     * Constructor
-     * @extends EventEmitter
-     * @param options Puppeteer browser options, for more informations see https://pptr.dev/#?product=Puppeteer&version=v2.0.0&show=api-puppeteerlaunchoptions
-     */
-    constructor(options) {
-        super();
-        this.options = options;
-        this.state = states.notInitialized;
-        this.browser = undefined;
-    }
+function LinkedinScraper(options) {
+    const _options = options;
+    let _browser = undefined;
+    let _state = states.notInitialized;
 
     /**
      * Initialize browser and listeners
      * @returns {Promise<void>}
      * @private
      */
-    async _initialize() {
-        this.state = states.initializing;
+    const _initialize = async () => {
+        _state = states.initializing;
 
-        if (this.browser) {
-            this.browser.removeAllListeners(events.puppeteer.browser.disconnected);
-            this.browser.removeAllListeners(events.puppeteer.browser.targetcreated);
-            this.browser.removeAllListeners(events.puppeteer.browser.targetchanged);
-            this.browser.removeAllListeners(events.puppeteer.browser.targetdestroyed);
-        }
+        _browser && _browser.removeAllListeners();
 
         const browserDefaults = {
             headless: true,
@@ -158,28 +146,28 @@ class LinkedinScraper extends EventEmitter {
         const options = Object.assign(
             {},
             browserDefaults,
-            this.options,
+            _options,
         );
 
-        this.browser = await puppeteer.launch(options);
+        _browser = await puppeteer.launch(options);
 
-        this.browser.on(events.puppeteer.browser.disconnected, () => {
+        _browser.on(events.puppeteer.browser.disconnected, () => {
             this.emit(events.puppeteer.browser.disconnected);
         });
 
-        this.browser.on(events.puppeteer.browser.targetcreated, () => {
+        _browser.on(events.puppeteer.browser.targetcreated, () => {
             this.emit(events.puppeteer.browser.targetcreated);
         });
 
-        this.browser.on(events.puppeteer.browser.targetchanged, () => {
+        _browser.on(events.puppeteer.browser.targetchanged, () => {
             this.emit(events.puppeteer.browser.targetchanged);
         });
 
-        this.browser.on(events.puppeteer.browser.targetdestroyed, () => {
+        _browser.on(events.puppeteer.browser.targetdestroyed, () => {
             this.emit(events.puppeteer.browser.targetdestroyed);
         });
 
-        this.state = states.initialized;
+        _state = states.initialized;
     }
 
     /**
@@ -191,13 +179,13 @@ class LinkedinScraper extends EventEmitter {
      * @returns {Promise<void>}
      * @private
      */
-    async _run(
+    const _run = async (
         queries,
         locations,
         paginationMax,
         descriptionProcessor
-    ) {
-        let tag = `[LI_SCRAPER]`;
+    ) => {
+        let tag;
 
         if (!(typeof(queries) === "string" || Array.isArray(queries))) {
             throw new Error(`'queries' parameter must be string or Array`);
@@ -223,11 +211,11 @@ class LinkedinScraper extends EventEmitter {
             locations = [locations];
         }
 
-        if (!this.browser) {
-            await this._initialize();
+        if (!_browser) {
+            await _initialize();
         }
 
-        const page = await this.browser.newPage();
+        const page = await _browser.newPage();
         await page.setRequestInterception(true);
 
         // Resources we don't want to load to improve performance
@@ -250,7 +238,7 @@ class LinkedinScraper extends EventEmitter {
                 || request.url().includes(".jpeg")
                 || request.url().includes(".png")
                 || request.url().includes(".gif")
-            // || request.url().includes(".css")
+                // || request.url().includes(".css")
             ) {
                 request.abort();
             }
@@ -268,7 +256,7 @@ class LinkedinScraper extends EventEmitter {
 
         for (const tuple of queriesXlocations) {
             const [query, location] = tuple;
-            tag = `[LI_SCRAPER][${query}][${location}]`;
+            tag = `[${query}][${location}]`;
 
             logger.info(tag, `Query="${query}"`, `Location="${location}"`);
 
@@ -348,7 +336,7 @@ class LinkedinScraper extends EventEmitter {
                         jobIndex
                     );
 
-                    // Try to load job; skip in case of error
+                    // Load job and extract description: skip in case of error
                     try {
                         [[jobId, jobLink]] = await Promise.all([
                             page.evaluate((linksSelector, jobIndex) => {
@@ -365,16 +353,8 @@ class LinkedinScraper extends EventEmitter {
 
                             _loadJobDetails(page, jobTitle, jobCompany),
                         ]);
-                    }
-                    catch(err) {
-                        err.message = tag + "\t" + err.message;
-                        this.emit(events.custom.error, err);
-                        continue;
-                    }
 
-                    // Try to extract job description
-                    try {
-                        // Use custom processor if available
+                        // Use custom description processor if available
                         if (descriptionProcessor) {
                             jobDescription = await page.evaluate(`(${descriptionProcessor.toString()})();`)
                         }
@@ -394,11 +374,6 @@ class LinkedinScraper extends EventEmitter {
                         this.emit(events.custom.error, err);
                         continue;
                     }
-
-                    // // Scroll down page; skip in case of error
-                    // await page.evaluate(_ => {
-                    //     window.scrollTo(0, document.body.scrollHeight)
-                    // });
 
                     // Emit data
                     this.emit(events.custom.data, {
@@ -438,9 +413,7 @@ class LinkedinScraper extends EventEmitter {
         }
 
         // Close page
-        try {
-            page && await page.close();
-        } catch(err) {  }
+        await page.close();
 
         // Emit end event
         this.emit(events.custom.end);
@@ -454,7 +427,7 @@ class LinkedinScraper extends EventEmitter {
      * @param [descriptionProcessor] {Function} Custom function to extract job description on browser side
      * @returns {Promise<void>}
      */
-    async run(
+    this.run = async (
         queries,
         locations,
         {
@@ -464,17 +437,17 @@ class LinkedinScraper extends EventEmitter {
             paginationMax: 10,
             descriptionProcessor: null,
         },
-    ) {
+    ) => {
         try {
-            if (this.state === states.notInitialized) {
-                await this._initialize();
+            if (_state === states.notInitialized) {
+                await _initialize();
             }
-            else if (this.state === states.initializing) {
+            else if (_state === states.initializing) {
                 const timeout = 10000;
                 const waitTime = 10;
                 let elapsed = 0;
 
-                while(this.state !== states.initialized) {
+                while(_state !== states.initialized) {
                     await wait(waitTime);
                     elapsed += waitTime;
 
@@ -484,7 +457,7 @@ class LinkedinScraper extends EventEmitter {
                 }
             }
 
-            await this._run(
+            await _run(
                 queries,
                 locations,
                 paginationMax,
@@ -501,10 +474,10 @@ class LinkedinScraper extends EventEmitter {
      * Close browser instance
      * @returns {Promise<void>}
      */
-    async close() {
-        this.browser && this.browser.removeAllListeners() && await this.browser.close();
-        this.browser = undefined;
-        this.state = states.notInitialized;
+    this.close = async () => {
+        _browser && _browser.removeAllListeners() && await _browser.close();
+        _browser = undefined;
+        _state = states.notInitialized;
     }
 }
 
@@ -535,5 +508,8 @@ LinkedinScraper.enableLoggerInfo = () => logger.enableInfo();
  * @static
  */
 LinkedinScraper.enableLoggerError = () => logger.enableError();
+
+// Extends EventEmitter
+inherits(LinkedinScraper, EventEmitter);
 
 module.exports = LinkedinScraper;

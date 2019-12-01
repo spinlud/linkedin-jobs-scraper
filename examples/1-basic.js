@@ -2,7 +2,7 @@ const { LinkedinScraper, events, } = require("../index");
 
 (async () => {
     // Programatically disable logger
-    setTimeout(() => LinkedinScraper.disableLogger(), 2000);
+    setTimeout(() => LinkedinScraper.disableLogger(), 5000);
 
     // Each scraper instance is associated with one browser.
     // Concurrent queries will be runned on different pages within the same browser instance.

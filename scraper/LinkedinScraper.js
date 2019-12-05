@@ -49,7 +49,7 @@ const _loadJobDetails = async (page, jobTitle, jobCompany, timeout = 2000) => {
             throw new Error(`Timeout on loading job: '${jobTitle}'`);
         }
     }
-}
+};
 
 /**
  * Try to load more jobs
@@ -109,7 +109,7 @@ const _loadMoreJobs = async (
             throw new Error(`Timeout on fetching more jobs`);
         }
     }
-}
+};
 
 /**
  * Main class
@@ -171,7 +171,7 @@ function LinkedinScraper(options) {
         });
 
         _state = states.initialized;
-    }
+    };
 
     /**
      * Do not use directly. Use run instead.
@@ -420,7 +420,7 @@ function LinkedinScraper(options) {
 
         // Emit end event
         this.emit(events.custom.end);
-    }
+    };
 
     /**
      * Scrape linkedin jobs
@@ -455,7 +455,7 @@ function LinkedinScraper(options) {
                     elapsed += waitTime;
 
                     if (elapsed >= timeout) {
-                        throw new Error(`Initializing timeout exceeded: ${timeout}ms`);
+                        throw new Error(`Initialize timeout exceeded: ${timeout}ms`);
                     }
                 }
             }
@@ -471,7 +471,7 @@ function LinkedinScraper(options) {
             logger.error(err);
             this.emit(events.custom.error, err);
         }
-    }
+    };
 
     /**
      * Close browser instance
@@ -481,7 +481,7 @@ function LinkedinScraper(options) {
         _browser && _browser.removeAllListeners() && await _browser.close();
         _browser = undefined;
         _state = states.notInitialized;
-    }
+    };
 }
 
 /**

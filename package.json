@@ -1,6 +1,6 @@
 {
   "name": "linkedin-jobs-scraper",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "Scrape public available job offers on Linkedin using headless browser",
   "main": "index.js",
   "scripts": {

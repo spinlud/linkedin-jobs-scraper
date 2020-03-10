@@ -16,14 +16,19 @@ const seeMoreJobsSelector = "button.see-more-jobs";
 
 /**
  * Wait for job details to load
+ * @private
  * @param page
  * @param jobTitle
  * @param jobCompany
  * @param timeout
- * @returns {Promise<void>}
- * @private
+ * @returns {Promise<{success: boolean, error?: string}>}
  */
-const _loadJobDetails = async (page, jobTitle, jobCompany, timeout = 2000) => {
+const _loadJobDetails = async (
+    page,
+    jobTitle,
+    jobCompany,
+    timeout = 2000
+) => {
     const waitTime = 10;
     let elapsed = 0;
     let loaded = false;
@@ -40,26 +45,31 @@ const _loadJobDetails = async (page, jobTitle, jobCompany, timeout = 2000) => {
             jobCompany
         );
 
-        if (loaded) return;
+        if (loaded) return { success: true };
 
         await wait(waitTime);
         elapsed += waitTime;
 
         if (elapsed >= timeout) {
-            throw new Error(`Timeout on loading job: '${jobTitle}'`);
+            return {
+                success: false,
+                error: `Timeout on loading job: '${jobTitle}'`
+            };
         }
     }
+
+    return { success: true };
 };
 
 /**
  * Try to load more jobs
+ * @private
  * @param page
  * @param seeMoreJobsSelector
  * @param linksSelector
  * @param jobLinksTot
  * @param timeout
- * @returns {Promise<void>}
- * @private
+ * @returns {Promise<{success: boolean, error?: string}>}
  */
 const _loadMoreJobs = async (
     page,
@@ -100,15 +110,20 @@ const _loadMoreJobs = async (
             jobLinksTot
         );
 
-        if (loaded) return;
+        if (loaded) return { success: true };
 
         await wait(waitTime);
         elapsed += waitTime;
 
         if (elapsed >= timeout) {
-            throw new Error(`Timeout on fetching more jobs`);
+            return {
+                success: false,
+                error: `Timeout on fetching more jobs`
+            };
         }
     }
+
+    return { success: true };
 };
 
 /**
@@ -118,6 +133,7 @@ const _loadMoreJobs = async (
  * @constructor
  */
 function LinkedinScraper(options) {
+    const _self = this;
     const _options = options;
     let _browser = undefined;
     let _state = states.notInitialized;
@@ -155,19 +171,19 @@ function LinkedinScraper(options) {
         _browser = await puppeteer.launch(options);
 
         _browser.on(events.puppeteer.browser.disconnected, () => {
-            this.emit(events.puppeteer.browser.disconnected);
+            _self.emit(events.puppeteer.browser.disconnected);
         });
 
         _browser.on(events.puppeteer.browser.targetcreated, () => {
-            this.emit(events.puppeteer.browser.targetcreated);
+            _self.emit(events.puppeteer.browser.targetcreated);
         });
 
         _browser.on(events.puppeteer.browser.targetchanged, () => {
-            this.emit(events.puppeteer.browser.targetchanged);
+            _self.emit(events.puppeteer.browser.targetchanged);
         });
 
         _browser.on(events.puppeteer.browser.targetdestroyed, () => {
-            this.emit(events.puppeteer.browser.targetdestroyed);
+            _self.emit(events.puppeteer.browser.targetdestroyed);
         });
 
         _state = states.initialized;
@@ -305,7 +321,9 @@ function LinkedinScraper(options) {
             // Scroll until there are no more job postings to visit or paginationMax is reached
             let paginationIndex = 0;
 
+            // Pagination loop
             while (++paginationIndex <= paginationMax) {
+                tag = `[${query}][${location}][${paginationIndex}]`;
 
                 // Get number of all job links in the page
                 const jobLinksTot = await page.evaluate(
@@ -315,9 +333,10 @@ function LinkedinScraper(options) {
 
                 logger.info(tag, "Job postings fetched: " + jobLinksTot);
 
-                // Iterate jobs
+                // Jobs loop
                 for (jobIndex; jobIndex < jobLinksTot; ++jobIndex) {
                     let jobId, jobLink, jobTitle, jobCompany, jobPlace, jobDescription;
+                    let loadJobDetailsResponse;
 
                     // Extract job data
                     [jobTitle, jobCompany, jobPlace] = await page.evaluate(
@@ -341,7 +360,7 @@ function LinkedinScraper(options) {
 
                     // Load job and extract description: skip in case of error
                     try {
-                        [[jobId, jobLink]] = await Promise.all([
+                        [[jobId, jobLink], loadJobDetailsResponse] = await Promise.all([
                             page.evaluate((linksSelector, jobIndex) => {
                                     const linkElem = document.querySelectorAll(linksSelector)[jobIndex];
                                     linkElem.click();
@@ -356,6 +375,15 @@ function LinkedinScraper(options) {
 
                             _loadJobDetails(page, jobTitle, jobCompany),
                         ]);
+
+                        // Check if job details loading has failed
+                        if (!loadJobDetailsResponse.success) {
+                            const errorMessage = `${tag}\t${loadJobDetailsResponse.error}`;
+                            logger.error(errorMessage);
+                            _self.emit(events.custom.error, errorMessage);
+
+                            continue;
+                        }
 
                         // Use custom description processor if available
                         if (descriptionProcessor) {
@@ -373,13 +401,13 @@ function LinkedinScraper(options) {
                         }
                     }
                     catch(err) {
-                        err.message = tag + "\t" + err.message;
-                        this.emit(events.custom.error, err);
+                        const errorMessage = `${tag}\t${err.message}`;
+                        _self.emit(events.custom.error, errorMessage);
                         continue;
                     }
 
                     // Emit data
-                    this.emit(events.custom.data, {
+                    _self.emit(events.custom.data, {
                         query: query,
                         location: location,
                         link: jobLink,
@@ -396,22 +424,25 @@ function LinkedinScraper(options) {
                 if (paginationIndex === paginationMax) break;
 
                 // Check if there are more job postings to load
-                try {
-                    logger.info(tag, "Checking for new job postings to fetch...");
+                logger.info(tag, "Checking for new job postings to fetch...");
 
-                    await _loadMoreJobs(
-                        page,
-                        seeMoreJobsSelector,
-                        linksSelector,
-                        jobLinksTot
-                    );
+                const loadMoreResponse = await _loadMoreJobs(
+                    page,
+                    seeMoreJobsSelector,
+                    linksSelector,
+                    jobLinksTot
+                );
 
-                    await wait(500);
+                // Check it loading job postings has failed
+                if (!loadMoreResponse.success) {
+                    const errorMessage = `${tag}\t${loadMoreResponse.error}`;
+                    logger.error(errorMessage);
+                    _self.emit(events.custom.error, errorMessage);
 
-                } catch(err) {
-                    this.emit(events.custom.error, err);
                     break;
                 }
+
+                await wait(500);
             }
         }
 
@@ -419,7 +450,7 @@ function LinkedinScraper(options) {
         await page.close();
 
         // Emit end event
-        this.emit(events.custom.end);
+        _self.emit(events.custom.end);
     };
 
     /**
@@ -469,7 +500,7 @@ function LinkedinScraper(options) {
         }
         catch (err) {
             logger.error(err);
-            this.emit(events.custom.error, err);
+            _self.emit(events.custom.error, err);
         }
     };
 

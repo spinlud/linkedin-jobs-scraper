@@ -2,6 +2,7 @@
 **/node_modules
 **/output*.txt
 **/output
+**/tmp
 
 # General
 .DS_Store

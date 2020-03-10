@@ -1,11 +1,27 @@
+sudo: required
+
 language: node_js
 node_js:
-  - "10"
+  - 12
 
-deploy:
-  edge: true
-  provider: npm
-  email: $NPM_EMAIL
-  api_key: $NPM_TOKEN
-  on:
-    branch: master
+install:
+  - npm install
+
+jobs:
+  include:
+    - stage: audit
+      script: npm run audit
+
+    - stage: deploy
+      script: npm run build
+      deploy:
+        edge: true
+        provider: npm
+        email: $NPM_EMAIL
+        api_key: $NPM_TOKEN
+        on:
+          branch: master
+
+stages:
+  - audit
+  - deploy

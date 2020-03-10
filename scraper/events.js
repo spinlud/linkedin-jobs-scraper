@@ -1,8 +1,8 @@
 module.exports = {
     custom: {
-        data: "data",
-        error: "error",
-        end: "end",
+        data: "custom_data",
+        error: "custom_error",
+        end: "custom_end",
     },
     puppeteer: {
         browser: {

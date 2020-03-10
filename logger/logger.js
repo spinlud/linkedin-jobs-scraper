@@ -16,7 +16,7 @@ const logger = {
     enableError: () => {
         debug.enable(`${namespace}:error`);
     },
-}
+};
 
 logger.info.log = console.log.bind(console);
 

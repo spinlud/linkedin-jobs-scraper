@@ -13,7 +13,6 @@ jobs:
       script: npm run audit
 
     - stage: deploy
-      script: npm run build
       deploy:
         edge: true
         provider: npm

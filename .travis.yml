@@ -8,8 +8,12 @@ install:
   - npm install
 
 jobs:
+  allow_failures:
+    - env: ALLOWED_TO_FAIL=true
+
   include:
     - stage: audit
+      env: ALLOWED_TO_FAIL=true
       script: npm run audit
 
     - stage: deploy

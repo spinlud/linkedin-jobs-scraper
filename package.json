@@ -1,9 +1,10 @@
 {
   "name": "linkedin-jobs-scraper",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Scrape public available job offers on Linkedin using headless browser",
   "main": "index.js",
   "scripts": {
+    "preinstall": "npx npm-force-resolutions",
     "audit": "npm audit",
     "example": "DEBUG=scraper:* node examples/example1.js"
   },
@@ -34,5 +35,12 @@
     "data-mining",
     "machine-learning",
     "selenium"
-  ]
+  ],
+  "devDependencies": {
+    "minimist": "^1.2.5",
+    "npm-force-resolutions": "0.0.3"
+  },
+  "resolutions": {
+    "minimist": "^1.2.5"
+  }
 }

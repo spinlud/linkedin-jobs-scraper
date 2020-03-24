@@ -7,7 +7,7 @@ const { LinkedinScraper, events, } = require("../index");
     // Each scraper instance is associated with one browser.
     // Concurrent queries will be runned on different pages within the same browser instance.
     const scraper = new LinkedinScraper({
-        headless: true,
+        headless: false,
         slowMo: 10,
     });
 
@@ -37,7 +37,7 @@ const { LinkedinScraper, events, } = require("../index");
     await Promise.all([
         scraper.run(
             "Graphic Designer",
-            "London",
+            ["Berlin", "London"],
             {
                 paginationMax: 2,
             }

@@ -9,6 +9,7 @@ const logger = require("../logger/logger");
 const url = "https://www.linkedin.com/jobs";
 const containerSelector = ".results__container.results__container--two-pane";
 const linksSelector = ".jobs-search__results-list li a.result-card__full-card-link";
+const datesSelector = '.job-result-card__listdate';
 const companiesSelector = ".result-card__subtitle.job-result-card__subtitle";
 const placesSelector = ".job-result-card__location";
 const descriptionSelector = ".description__text";
@@ -335,26 +336,29 @@ function LinkedinScraper(options) {
 
                 // Jobs loop
                 for (jobIndex; jobIndex < jobLinksTot; ++jobIndex) {
-                    let jobId, jobLink, jobTitle, jobCompany, jobPlace, jobDescription;
+                    let jobId, jobLink, jobTitle, jobCompany, jobPlace, jobDescription, jobDate;
                     let loadJobDetailsResponse;
 
                     // Extract job data
-                    [jobTitle, jobCompany, jobPlace] = await page.evaluate(
+                    [jobTitle, jobCompany, jobPlace, jobDate] = await page.evaluate(
                         (
                             linksSelector,
                             companiesSelector,
                             placesSelector,
+                            datesSelector,
                             jobIndex
                         ) => {
                             return [
                                 document.querySelectorAll(linksSelector)[jobIndex].innerText,
                                 document.querySelectorAll(companiesSelector)[jobIndex].innerText,
                                 document.querySelectorAll(placesSelector)[jobIndex].innerText,
+                                document.querySelectorAll(datesSelector)[jobIndex].getAttribute('datetime')
                             ];
                         },
                         linksSelector,
                         companiesSelector,
                         placesSelector,
+                        datesSelector,
                         jobIndex
                     );
 
@@ -415,6 +419,7 @@ function LinkedinScraper(options) {
                         company: jobCompany,
                         place: jobPlace,
                         description: jobDescription,
+                        date: jobDate
                     });
 
                     jobsProcessed++;

@@ -9,8 +9,8 @@ const { LinkedinScraper, events, } = require("../index");
         slowMo: 10,
     });
 
-    scraper.on(events.custom.data, ({ query, location, link, title, company, place, description, }) => {
-        console.log(description);
+    scraper.on(events.custom.data, ({ query, location, link, title, company, place, description, date }) => {
+        console.log(date, description);
     });
 
     // Custom function executed on browser side to extract job description

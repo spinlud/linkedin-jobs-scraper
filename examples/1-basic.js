@@ -12,7 +12,7 @@ const { LinkedinScraper, events, } = require("../index");
     });
 
     // Listen for custom events
-    scraper.on(events.custom.data, ({ query, location, link, title, company, place, description, }) => {
+    scraper.on(events.custom.data, ({ query, location, link, title, company, place, description, date }) => {
         console.log(
             description.length,
             `Query='${query}'`,
@@ -20,6 +20,7 @@ const { LinkedinScraper, events, } = require("../index");
             `Title='${title}'`,
             `Company='${company}'`,
             `Place='${place}'`,
+            `Date='${date}'`,
             `Link='${link}'`,
         );
     });

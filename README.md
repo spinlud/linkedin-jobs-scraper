@@ -1,7 +1,7 @@
 # linkedin-jobs-scraper
 > Scrape public available job offers on Linkedin using headless browser (account credentials are not required).
 > It is possible to run different queries on different locations concurrently. 
-> For each job offer the following data fields are extracted: `title`, `company`, `place`, `link`, `description`.
+> For each job offer the following data fields are extracted: `title`, `company`, `place`, `date`, `link`, `description`.
 
 ## Table of Contents
 
@@ -40,7 +40,7 @@ const { LinkedinScraper, events, } = require("linkedin-jobs-scraper");
     });
 
     // Listen for custom events
-    scraper.on(events.custom.data, ({ query, location, link, title, company, place, description, }) => {
+    scraper.on(events.custom.data, ({ query, location, link, title, company, place, date, description, }) => {
         console.log(
             description.length,
             `Query='${query}'`,
@@ -48,6 +48,7 @@ const { LinkedinScraper, events, } = require("linkedin-jobs-scraper");
             `Title='${title}'`,
             `Company='${company}'`,
             `Place='${place}'`,
+            `Date='${date}'`,
             `Link='${link}'`,
         );
     });

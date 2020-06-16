@@ -14,6 +14,7 @@ const companiesSelector = ".result-card__subtitle.job-result-card__subtitle";
 const placesSelector = ".job-result-card__location";
 const descriptionSelector = ".description__text";
 const seeMoreJobsSelector = "button.see-more-jobs";
+const jobCriteriaSelector = "li.job-criteria__item";
 
 /**
  * Wait for job details to load
@@ -337,9 +338,10 @@ function LinkedinScraper(options) {
                 // Jobs loop
                 for (jobIndex; jobIndex < jobLinksTot; ++jobIndex) {
                     let jobId, jobLink, jobTitle, jobCompany, jobPlace, jobDescription, jobDate;
+                    let jobSenorityLevel, jobFunction, jobEmploymentType, jobIndustries;
                     let loadJobDetailsResponse;
 
-                    // Extract job data
+                    // Extract job main fields
                     [jobTitle, jobCompany, jobPlace, jobDate] = await page.evaluate(
                         (
                             linksSelector,
@@ -403,6 +405,34 @@ function LinkedinScraper(options) {
                                 descriptionSelector
                             );
                         }
+
+                        // Extract job criteria fields
+                        [jobSenorityLevel, jobFunction, jobEmploymentType, jobIndustries] = await page.evaluate(
+                            (
+                                jobCriteriaSelector
+                            ) => {
+                                const items = document.querySelectorAll(jobCriteriaSelector);
+
+                                const criterias = [
+                                    'Seniority level',
+                                    'Job function',
+                                    'Employment type',
+                                    'Industries'
+                                ];
+
+                                const nodeList = criterias.map(criteria => {
+                                    const el = Array.from(items)
+                                        .find(li => li.querySelector('h3').innerText === criteria);
+
+                                    return el ? el.querySelectorAll('span') : [];
+                                });
+
+                                return Array.from(nodeList)
+                                    .map(spanList => Array.from(spanList).map(e => e.innerText).join(', '));
+
+                            },
+                            jobCriteriaSelector
+                        );
                     }
                     catch(err) {
                         const errorMessage = `${tag}\t${err.message}`;
@@ -419,7 +449,11 @@ function LinkedinScraper(options) {
                         company: jobCompany,
                         place: jobPlace,
                         description: jobDescription,
-                        date: jobDate
+                        date: jobDate,
+                        senorityLevel: jobSenorityLevel,
+                        jobFunction: jobFunction,
+                        employmentType: jobEmploymentType,
+                        industries: jobIndustries,
                     });
 
                     jobsProcessed++;

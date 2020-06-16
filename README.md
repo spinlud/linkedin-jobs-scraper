@@ -1,7 +1,8 @@
 # linkedin-jobs-scraper
 > Scrape public available job offers on Linkedin using headless browser (account credentials are not required).
 > It is possible to run different queries on different locations concurrently. 
-> For each job offer the following data fields are extracted: `title`, `company`, `place`, `date`, `link`, `description`.
+> For each job the following data fields are extracted: `title`, `company`, `place`, `date`, `link`, `description`, 
+> `senorityLevel`, `jobFunction`, `employmentType`, `industries`.
 
 ## Table of Contents
 
@@ -50,11 +51,15 @@ const { LinkedinScraper, events, } = require("linkedin-jobs-scraper");
             `Place='${place}'`,
             `Date='${date}'`,
             `Link='${link}'`,
+            `senorityLevel='${senorityLevel}'`,
+            `function='${jobFunction}'`,
+            `employmentType='${employmentType}'`,
+            `industries='${industries}'`,
         );
     });
 
-    scraper.on(events.custom.error, (err) => { });
-    scraper.on(events.custom.end, () => { });
+    scraper.on(events.custom.error, (err) => { console.error(err); });
+    scraper.on(events.custom.end, () => { console.log('All done!'); });
 
     // Listen for puppeteer specific browser events
     scraper.on(events.puppeteer.browser.targetcreated, () => { });

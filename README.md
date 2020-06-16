@@ -41,7 +41,20 @@ const { LinkedinScraper, events, } = require("linkedin-jobs-scraper");
     });
 
     // Listen for custom events
-    scraper.on(events.custom.data, ({ query, location, link, title, company, place, date, description, }) => {
+    scraper.on(events.custom.data, ({ 
+        query,
+        location,
+        link,
+        title,
+        company,
+        place,
+        date,
+        description,
+        senorityLevel,
+        jobFunction,
+        employmentType,
+        industries 
+    }) => {
         console.log(
             description.length,
             `Query='${query}'`,

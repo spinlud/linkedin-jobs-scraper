@@ -341,31 +341,31 @@ function LinkedinScraper(options) {
                     let jobSenorityLevel, jobFunction, jobEmploymentType, jobIndustries;
                     let loadJobDetailsResponse;
 
-                    // Extract job main fields
-                    [jobTitle, jobCompany, jobPlace, jobDate] = await page.evaluate(
-                        (
+                    try {
+                        // Extract job main fields
+                        [jobTitle, jobCompany, jobPlace, jobDate] = await page.evaluate(
+                            (
+                                linksSelector,
+                                companiesSelector,
+                                placesSelector,
+                                datesSelector,
+                                jobIndex
+                            ) => {
+                                return [
+                                    document.querySelectorAll(linksSelector)[jobIndex].innerText,
+                                    document.querySelectorAll(companiesSelector)[jobIndex].innerText,
+                                    document.querySelectorAll(placesSelector)[jobIndex].innerText,
+                                    document.querySelectorAll(datesSelector)[jobIndex].getAttribute('datetime')
+                                ];
+                            },
                             linksSelector,
                             companiesSelector,
                             placesSelector,
                             datesSelector,
                             jobIndex
-                        ) => {
-                            return [
-                                document.querySelectorAll(linksSelector)[jobIndex].innerText,
-                                document.querySelectorAll(companiesSelector)[jobIndex].innerText,
-                                document.querySelectorAll(placesSelector)[jobIndex].innerText,
-                                document.querySelectorAll(datesSelector)[jobIndex].getAttribute('datetime')
-                            ];
-                        },
-                        linksSelector,
-                        companiesSelector,
-                        placesSelector,
-                        datesSelector,
-                        jobIndex
-                    );
+                        );
 
-                    // Load job and extract description: skip in case of error
-                    try {
+                        // Load job and extract description: skip in case of error
                         [[jobId, jobLink], loadJobDetailsResponse] = await Promise.all([
                             page.evaluate((linksSelector, jobIndex) => {
                                     const linkElem = document.querySelectorAll(linksSelector)[jobIndex];

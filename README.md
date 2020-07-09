@@ -101,6 +101,7 @@ const { LinkedinScraper, events, } = require("linkedin-jobs-scraper");
             {
                 paginationMax: 1,
                 descriptionProcessor,
+                optimize: true, // Block resources such as images, fonts etc to improve bandwidth usage
             }
         )
     ]);
@@ -139,6 +140,7 @@ constructor(options) { }
  * @param locations Array[String] of locations
  * @param [paginationMax] {Number} Max number of pagination
  * @param [descriptionProcessor] {Function} Custom function to extract job description on browser side
+ * @param [optimize] {Boolean} Block resources such as images, stylesheets etc to improve bandwidth usage
  * @returns {Promise<void>}
  */
 async run(
@@ -147,9 +149,11 @@ async run(
     {
         paginationMax,
         descriptionProcessor,
+        optimize,
     } = {
         paginationMax: 10,
         descriptionProcessor: null,
+        optimize: false,
     },    
 ) { }
 

@@ -9,11 +9,11 @@ const logger = require("../logger/logger");
 const url = "https://www.linkedin.com/jobs";
 const containerSelector = ".results__container.results__container--two-pane";
 const linksSelector = ".jobs-search__results-list li a.result-card__full-card-link";
-const datesSelector = '.job-result-card__listdate';
+const datesSelector = 'time';
 const companiesSelector = ".result-card__subtitle.job-result-card__subtitle";
 const placesSelector = ".job-result-card__location";
 const descriptionSelector = ".description__text";
-const seeMoreJobsSelector = "button.see-more-jobs";
+const seeMoreJobsSelector = "button.infinite-scroller__show-more-button";
 const jobCriteriaSelector = "li.job-criteria__item";
 
 /**
@@ -197,6 +197,7 @@ function LinkedinScraper(options) {
      * @param locations Array[String] of locations
      * @param [paginationMax] {Number}
      * @param [descriptionProcessor] {Function} Custom function to extract job description on browser side
+     * @param [optimize] {Boolean} Block resources such as images, stylesheets etc to improve bandwidth usage
      * @returns {Promise<void>}
      * @private
      */
@@ -204,7 +205,8 @@ function LinkedinScraper(options) {
         queries,
         locations,
         paginationMax,
-        descriptionProcessor
+        descriptionProcessor,
+        optimize
     ) => {
         let tag;
 
@@ -237,36 +239,39 @@ function LinkedinScraper(options) {
         }
 
         const page = await _browser.newPage();
-        await page.setRequestInterception(true);
 
-        // Resources we don't want to load to improve performance
-        const resourcesToBlock = [
-            "image",
-            // "stylesheet",
-            "media",
-            "font",
-            "texttrack",
-            "object",
-            "beacon",
-            "csp_report",
-            "imageset",
-        ];
+        // Resources we don't want to load to improve bandwidth usage
+        if (optimize) {
+            await page.setRequestInterception(true);
 
-        page.on("request", request => {
-            if (
-                resourcesToBlock.some(r => request.resourceType() === r)
-                || request.url().includes(".jpg")
-                || request.url().includes(".jpeg")
-                || request.url().includes(".png")
-                || request.url().includes(".gif")
-                // || request.url().includes(".css")
-            ) {
-                request.abort();
-            }
-            else {
-                request.continue();
-            }
-        });
+            const resourcesToBlock = [
+                "image",
+                "stylesheet",
+                "media",
+                "font",
+                "texttrack",
+                "object",
+                "beacon",
+                "csp_report",
+                "imageset",
+            ];
+
+            page.on("request", request => {
+                if (
+                    resourcesToBlock.some(r => request.resourceType() === r)
+                    || request.url().includes(".jpg")
+                    || request.url().includes(".jpeg")
+                    || request.url().includes(".png")
+                    || request.url().includes(".gif")
+                    || request.url().includes(".css")
+                ) {
+                    request.abort();
+                }
+                else {
+                    request.continue();
+                }
+            });
+        }
 
         // Array([query, location])
         const queriesXlocations = queries
@@ -355,7 +360,8 @@ function LinkedinScraper(options) {
                                     document.querySelectorAll(linksSelector)[jobIndex].innerText,
                                     document.querySelectorAll(companiesSelector)[jobIndex].innerText,
                                     document.querySelectorAll(placesSelector)[jobIndex].innerText,
-                                    document.querySelectorAll(datesSelector)[jobIndex].getAttribute('datetime')
+                                    document.querySelectorAll(datesSelector)[jobIndex]
+                                        .getAttribute('datetime')
                                 ];
                             },
                             linksSelector,
@@ -498,6 +504,7 @@ function LinkedinScraper(options) {
      * @param locations Array[String] of locations
      * @param [paginationMax] {Number} Max number of pagination
      * @param [descriptionProcessor] {Function} Custom function to extract job description on browser side
+     * @param [optimize] {Boolean} Block resources such as images, stylesheets etc to improve bandwidth usage
      * @returns {Promise<void>}
      */
     this.run = async (
@@ -506,9 +513,11 @@ function LinkedinScraper(options) {
         {
             paginationMax,
             descriptionProcessor,
+            optimize,
         } = {
             paginationMax: 10,
             descriptionProcessor: null,
+            optimize: false,
         },
     ) => {
         try {
@@ -534,7 +543,8 @@ function LinkedinScraper(options) {
                 queries,
                 locations,
                 paginationMax,
-                descriptionProcessor
+                descriptionProcessor,
+                optimize
             );
         }
         catch (err) {

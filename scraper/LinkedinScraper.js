@@ -288,19 +288,22 @@ function LinkedinScraper(options) {
 
             // Open url
             await page.goto(url, {
-                waitLoad: true,
-                waitNetworkIdle: true
+                waitUntil: 'networkidle0',
             });
 
             logger.info(tag, "Page loaded");
 
             // Wait form search input selectors
-            await page.waitForSelector("form#JOBS", {timeout: 10000});
-            await page.waitForSelector(`button[form="JOBS"]`, {timeout: 10000});
+            await Promise.all([
+                page.waitForSelector("form#JOBS", {timeout: 10000}),
+                page.waitForSelector(`button[form="JOBS"]`, {timeout: 10000})
+            ]);
 
-            // Clear and fill search inputs
+            // Clear search inputs
             await page.evaluate(() => document.querySelector(`form#JOBS input[name="keywords"]`).value = "");
             await page.evaluate(() => document.querySelector(`form#JOBS input[name="location"]`).value = "");
+
+            // Fill search inputs
             await page.type(`form#JOBS input[name="keywords"]`, query);
             await page.type(`form#JOBS input[name="location"]`, location);
 

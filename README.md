@@ -124,7 +124,17 @@ Each `LinkedinScraper` instance is associated with one browser (Chromium) instan
 * `locations` required, must be a string or an array of strings
 * Optional object with the following:
     - `paginationMax` {Number} Maximum number of pagination
-    - `descriptionProcessor` {Function} Function executed on browser side (you have access to `window`, `document`, etc) to extract job description   
+    - `descriptionProcessor` {Function} Function executed on browser side (you have access to `window`, `document`, etc) to extract job description
+    - `optimize` {Boolean} Block resources such as images, stylesheets etc to improve bandwidth usage. Specifically the following resources are blocked:
+        * image
+        * stylesheet
+        * media
+        * font
+        * texttrack
+        * object
+        * beacon
+        * csp_report
+        * imageset
  
 ```js
 /**

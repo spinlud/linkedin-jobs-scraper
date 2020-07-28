@@ -1,10 +1,10 @@
-const { inherits, }  = require("util");
-const { EventEmitter, } = require("events");
-const puppeteer = require("puppeteer");
-const events = require("./events");
-const states = require("./states");
-const { wait, } = require("../utils/utils");
-const logger = require("../logger/logger");
+import { EventEmitter } from "events";
+import puppeteer, { Browser, Page, LaunchOptions } from "puppeteer";
+import { events } from "./events";
+import { states } from "./states";
+import { runOptionsDefaults, browserDefaults, IRunOptions } from "./defaults";
+import { logger } from "../logger/logger";
+import { sleep } from "../utils/utils";
 
 const url = "https://www.linkedin.com/jobs";
 const containerSelector = ".results__container.results__container--two-pane";
@@ -18,18 +18,18 @@ const jobCriteriaSelector = "li.job-criteria__item";
 
 /**
  * Wait for job details to load
- * @private
- * @param page
- * @param jobTitle
- * @param jobCompany
- * @param timeout
+ * @param page {Page}
+ * @param jobTitle {string}
+ * @param jobCompany {string}
+ * @param timeout {number}
  * @returns {Promise<{success: boolean, error?: string}>}
+ * @private
  */
 const _loadJobDetails = async (
-    page,
-    jobTitle,
-    jobCompany,
-    timeout = 2000
+    page: Page,
+    jobTitle: string,
+    jobCompany: string,
+    timeout: number = 2000
 ) => {
     const waitTime = 10;
     let elapsed = 0;
@@ -38,7 +38,7 @@ const _loadJobDetails = async (
     while(!loaded) {
         loaded = await page.evaluate(
             (jobTitle, jobCompany) => {
-                const jobHeaderRight = document.querySelector(".topcard__content-left");
+                const jobHeaderRight = document.querySelector(".topcard__content-left") as HTMLElement;
                 return jobHeaderRight &&
                     jobHeaderRight.innerText.includes(jobTitle) &&
                     jobHeaderRight.innerText.includes(jobCompany);
@@ -49,7 +49,7 @@ const _loadJobDetails = async (
 
         if (loaded) return { success: true };
 
-        await wait(waitTime);
+        await sleep(waitTime);
         elapsed += waitTime;
 
         if (elapsed >= timeout) {
@@ -65,20 +65,20 @@ const _loadJobDetails = async (
 
 /**
  * Try to load more jobs
- * @private
- * @param page
- * @param seeMoreJobsSelector
- * @param linksSelector
- * @param jobLinksTot
- * @param timeout
+ * @param page {Page}
+ * @param seeMoreJobsSelector {string}
+ * @param linksSelector {string}
+ * @param jobLinksTot {number}
+ * @param timeout {number}
  * @returns {Promise<{success: boolean, error?: string}>}
+ * @private
  */
 const _loadMoreJobs = async (
-    page,
-    seeMoreJobsSelector,
-    linksSelector,
-    jobLinksTot,
-    timeout = 2000
+    page: Page,
+    seeMoreJobsSelector: string,
+    linksSelector: string,
+    jobLinksTot: number,
+    timeout: number = 2000
 ) => {
     const waitTime = 10;
     let elapsed = 0;
@@ -114,7 +114,7 @@ const _loadMoreJobs = async (
 
         if (loaded) return { success: true };
 
-        await wait(waitTime);
+        await sleep(waitTime);
         elapsed += waitTime;
 
         if (elapsed >= timeout) {
@@ -134,81 +134,95 @@ const _loadMoreJobs = async (
  * @param options {Object} Puppeteer browser options, for more informations see https://pptr.dev/#?product=Puppeteer&version=v2.0.0&show=api-puppeteerlaunchoptions
  * @constructor
  */
-function LinkedinScraper(options) {
-    const _self = this;
-    const _options = options;
-    let _browser = undefined;
-    let _state = states.notInitialized;
+class LinkedinScraper extends EventEmitter {
+    private _browser: Browser | undefined = undefined;
+    private _state = states.notInitialized;
+
+    public options: LaunchOptions;
+
+    constructor(options: LaunchOptions) {
+        super();
+        this.options = options;
+    }
 
     /**
-     * Initialize browser and listeners
+     * Enable logger
+     * @returns void
+     * @static
+     */
+    public static enableLogger = () => logger.enable();
+
+    /**
+     * Disable logger
+     * @returns void
+     * @static
+     */
+    public static disableLogger = () => logger.disable();
+
+    /**
+     * Enable logger info namespace
+     * @returns void
+     * @static
+     */
+    public static enableLoggerInfo = () => logger.enableInfo();
+
+    /**
+     * Enable logger error namespace
+     * @returns void
+     * @static
+     */
+    public static enableLoggerError = () => logger.enableError();
+
+    /**
+     * Initialize browser
+     * @private
+     */
+    private async _initialize() {
+        this._state = states.initializing;
+
+        this._browser && this._browser.removeAllListeners();
+
+        this._browser = await puppeteer.launch({
+            ...browserDefaults,
+            ...this.options,
+        });
+
+        this._browser.on(events.puppeteer.browser.disconnected, () => {
+            this.emit(events.puppeteer.browser.disconnected);
+        });
+
+        this._browser.on(events.puppeteer.browser.targetcreated, () => {
+            this.emit(events.puppeteer.browser.targetcreated);
+        });
+
+        this._browser.on(events.puppeteer.browser.targetchanged, () => {
+            this.emit(events.puppeteer.browser.targetchanged);
+        });
+
+        this._browser.on(events.puppeteer.browser.targetdestroyed, () => {
+            this.emit(events.puppeteer.browser.targetdestroyed);
+        });
+
+        this._state = states.initialized;
+    }
+
+    /**
+     * Scrape linkedin jobs
+     * @param queries {string | Array<string>}
+     * @param locations {string | Array<string>}
+     * @param options {IRunOptions}
      * @returns {Promise<void>}
      * @private
      */
-    const _initialize = async () => {
-        _state = states.initializing;
-
-        _browser && _browser.removeAllListeners();
-
-        const browserDefaults = {
-            headless: true,
-            args: [
-                "--lang=en-GB",
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-gpu",
-                "--disable-dev-shm-usage",
-            ],
-            defaultViewport: null,
-            pipe: true,
-            slowMo: 10,
-        };
-
-        const options = Object.assign(
-            {},
-            browserDefaults,
-            _options,
-        );
-
-        _browser = await puppeteer.launch(options);
-
-        _browser.on(events.puppeteer.browser.disconnected, () => {
-            _self.emit(events.puppeteer.browser.disconnected);
-        });
-
-        _browser.on(events.puppeteer.browser.targetcreated, () => {
-            _self.emit(events.puppeteer.browser.targetcreated);
-        });
-
-        _browser.on(events.puppeteer.browser.targetchanged, () => {
-            _self.emit(events.puppeteer.browser.targetchanged);
-        });
-
-        _browser.on(events.puppeteer.browser.targetdestroyed, () => {
-            _self.emit(events.puppeteer.browser.targetdestroyed);
-        });
-
-        _state = states.initialized;
-    };
-
-    /**
-     * Do not use directly. Use run instead.
-     * @param queries Array[String] of queries
-     * @param locations Array[String] of locations
-     * @param [paginationMax] {Number}
-     * @param [descriptionProcessor] {Function} Custom function to extract job description on browser side
-     * @param [optimize] {Boolean} Block resources such as images, stylesheets etc to improve bandwidth usage
-     * @returns {Promise<void>}
-     * @private
-     */
-    const _run = async (
-        queries,
-        locations,
-        paginationMax,
-        descriptionProcessor,
-        optimize
+    private _run = async (
+        queries: string | Array<string>,
+        locations: string | Array<string>,
+        options: IRunOptions
     ) => {
         let tag;
+        let paginationMax = options.paginationMax || 1;
+        let descriptionProcessor = options.descriptionProcessor;
+        let optimize = !!options.optimize;
 
         if (!(typeof(queries) === "string" || Array.isArray(queries))) {
             throw new Error(`'queries' parameter must be string or Array`);
@@ -226,19 +240,19 @@ function LinkedinScraper(options) {
             throw new Error(`'descriptionProcessor' must be a function`)
         }
 
-        if (!Array.isArray(queries) && typeof(queries) === "string") {
+        if (!Array.isArray(queries)) {
             queries = [queries];
         }
 
-        if (!Array.isArray(locations) && typeof(locations) === "string") {
+        if (!Array.isArray(locations)) {
             locations = [locations];
         }
 
-        if (!_browser) {
-            await _initialize();
+        if (!this._browser) {
+            await this._initialize();
         }
 
-        const page = await _browser.newPage();
+        const page = await this._browser!.newPage();
 
         // Resources we don't want to load to improve bandwidth usage
         if (optimize) {
@@ -275,7 +289,7 @@ function LinkedinScraper(options) {
 
         // Array([query, location])
         const queriesXlocations = queries
-            .map(q => locations.map(l => [q, l]))
+            .map(q => (locations as Array<string>).map(l => [q, l]))
             .reduce((a, b) => a.concat(b));
 
         let jobsProcessed = 0;
@@ -300,8 +314,10 @@ function LinkedinScraper(options) {
             ]);
 
             // Clear search inputs
-            await page.evaluate(() => document.querySelector(`form#JOBS input[name="keywords"]`).value = "");
-            await page.evaluate(() => document.querySelector(`form#JOBS input[name="location"]`).value = "");
+            await page.evaluate(() =>
+                (<HTMLInputElement>document.querySelector(`form#JOBS input[name="keywords"]`)).value = "");
+            await page.evaluate(() =>
+                (<HTMLInputElement>document.querySelector(`form#JOBS input[name="location"]`)).value = "");
 
             // Fill search inputs
             await page.type(`form#JOBS input[name="keywords"]`, query);
@@ -395,7 +411,7 @@ function LinkedinScraper(options) {
                         if (!loadJobDetailsResponse.success) {
                             const errorMessage = `${tag}\t${loadJobDetailsResponse.error}`;
                             logger.error(errorMessage);
-                            _self.emit(events.custom.error, errorMessage);
+                            this.emit(events.scraper.error, errorMessage);
 
                             continue;
                         }
@@ -437,20 +453,20 @@ function LinkedinScraper(options) {
                                 });
 
                                 return Array.from(nodeList)
-                                    .map(spanList => Array.from(spanList).map(e => e.innerText).join(', '));
-
+                                    .map(spanList => Array.from(spanList as Array<HTMLElement>)
+                                        .map(e => e.innerText).join(', '));
                             },
                             jobCriteriaSelector
                         );
                     }
                     catch(err) {
                         const errorMessage = `${tag}\t${err.message}`;
-                        _self.emit(events.custom.error, errorMessage);
+                        this.emit(events.scraper.error, errorMessage);
                         continue;
                     }
 
                     // Emit data
-                    _self.emit(events.custom.data, {
+                    this.emit(events.scraper.data, {
                         query: query,
                         location: location,
                         link: jobLink,
@@ -485,12 +501,12 @@ function LinkedinScraper(options) {
                 if (!loadMoreResponse.success) {
                     const errorMessage = `${tag}\t${loadMoreResponse.error}`;
                     logger.error(errorMessage);
-                    _self.emit(events.custom.error, errorMessage);
+                    this.emit(events.scraper.error, errorMessage);
 
                     break;
                 }
 
-                await wait(500);
+                await sleep(500);
             }
         }
 
@@ -498,42 +514,32 @@ function LinkedinScraper(options) {
         await page.close();
 
         // Emit end event
-        _self.emit(events.custom.end);
+        this.emit(events.scraper.end);
     };
 
     /**
      * Scrape linkedin jobs
-     * @param queries Array[String] of queries
-     * @param locations Array[String] of locations
-     * @param [paginationMax] {Number} Max number of pagination
-     * @param [descriptionProcessor] {Function} Custom function to extract job description on browser side
-     * @param [optimize] {Boolean} Block resources such as images, stylesheets etc to improve bandwidth usage
+     * @param queries {string | Array<string>}
+     * @param locations {string | Array<string>}
+     * @param options {IRunOptions}
      * @returns {Promise<void>}
      */
-    this.run = async (
-        queries,
-        locations,
-        {
-            paginationMax,
-            descriptionProcessor,
-            optimize,
-        } = {
-            paginationMax: 10,
-            descriptionProcessor: null,
-            optimize: false,
-        },
+    public run = async (
+        queries: string | Array<string>,
+        locations: string | Array<string>,
+        options: IRunOptions = runOptionsDefaults
     ) => {
         try {
-            if (_state === states.notInitialized) {
-                await _initialize();
+            if (this._state === states.notInitialized) {
+                await this._initialize();
             }
-            else if (_state === states.initializing) {
+            else if (this._state === states.initializing) {
                 const timeout = 10000;
                 const waitTime = 10;
                 let elapsed = 0;
 
-                while(_state !== states.initialized) {
-                    await wait(waitTime);
+                while(this._state !== states.initialized) {
+                    await sleep(waitTime);
                     elapsed += waitTime;
 
                     if (elapsed >= timeout) {
@@ -542,17 +548,15 @@ function LinkedinScraper(options) {
                 }
             }
 
-            await _run(
+            await this._run(
                 queries,
                 locations,
-                paginationMax,
-                descriptionProcessor,
-                optimize
+                options
             );
         }
         catch (err) {
             logger.error(err);
-            _self.emit(events.custom.error, err);
+            this.emit(events.scraper.error, err);
         }
     };
 
@@ -560,42 +564,11 @@ function LinkedinScraper(options) {
      * Close browser instance
      * @returns {Promise<void>}
      */
-    this.close = async () => {
-        _browser && _browser.removeAllListeners() && await _browser.close();
-        _browser = undefined;
-        _state = states.notInitialized;
+    public close = async () => {
+        this._browser && this._browser.removeAllListeners() && await this._browser.close();
+        this._browser = undefined;
+        this._state = states.notInitialized;
     };
 }
 
-/**
- * Enable logger
- * @returns void
- * @static
- */
-LinkedinScraper.enableLogger = () => logger.enable();
-
-/**
- * Disable logger
- * @returns void
- * @static
- */
-LinkedinScraper.disableLogger = () => logger.disable();
-
-/**
- * Enable logger info namespace
- * @returns void
- * @static
- */
-LinkedinScraper.enableLoggerInfo = () => logger.enableInfo();
-
-/**
- * Enable logger error namespace
- * @returns void
- * @static
- */
-LinkedinScraper.enableLoggerError = () => logger.enableError();
-
-// Extends EventEmitter
-inherits(LinkedinScraper, EventEmitter);
-
-module.exports = LinkedinScraper;
+export { LinkedinScraper };

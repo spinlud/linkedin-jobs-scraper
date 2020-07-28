@@ -11,7 +11,6 @@
 * [Installation](#installation)
 * [Usage](#usage)
 * [LinkedinScraper](#linkedinscraper)
-* [Events](#events)
 * [Logger](#logger)
 * [License](#license)
 
@@ -26,65 +25,49 @@ npm install --save linkedin-jobs-scraper
 
 
 ## Usage 
-```js
-const { LinkedinScraper, events, } = require("linkedin-jobs-scraper");
+```ts
+import { LinkedinScraper, events, IData } from "linkedin-jobs-scraper";
 
-(async () => {
-    // Programatically disable logger
-    setTimeout(() => LinkedinScraper.disableLogger(), 5000);
-
+(async () => {    
     // Each scraper instance is associated with one browser.
-    // Concurrent queries will be runned on different pages within the same browser instance.
+    // Concurrent queries will run on different pages within the same browser instance.
     const scraper = new LinkedinScraper({
         headless: true,
         slowMo: 10,
     });
 
-    // Listen for custom events
-    scraper.on(events.custom.data, ({ 
-        query,
-        location,
-        link,
-        title,
-        company,
-        place,
-        date,
-        description,
-        senorityLevel,
-        jobFunction,
-        employmentType,
-        industries 
-    }) => {
+    // Add listeners for scraper events
+    scraper.on(events.scraper.data, (data: IData) => {
         console.log(
-            description.length,
-            `Query='${query}'`,
-            `Location='${location}'`,
-            `Title='${title}'`,
-            `Company='${company}'`,
-            `Place='${place}'`,
-            `Date='${date}'`,
-            `Link='${link}'`,
-            `senorityLevel='${senorityLevel}'`,
-            `function='${jobFunction}'`,
-            `employmentType='${employmentType}'`,
-            `industries='${industries}'`,
+            data.description.length,
+            `Query='${data.query}'`,
+            `Location='${data.location}'`,
+            `Title='${data.title}'`,
+            `Company='${data.company}'`,
+            `Place='${data.place}'`,
+            `Date='${data.date}'`,
+            `Link='${data.link}'`,
+            `senorityLevel='${data.senorityLevel}'`,
+            `function='${data.jobFunction}'`,
+            `employmentType='${data.employmentType}'`,
+            `industries='${data.industries}'`,
         );
     });
 
-    scraper.on(events.custom.error, (err) => { console.error(err); });
-    scraper.on(events.custom.end, () => { console.log('All done!'); });
+    scraper.on(events.scraper.error, (err) => { console.error(err); });
+    scraper.on(events.scraper.end, () => { console.log('All done!'); });
 
-    // Listen for puppeteer specific browser events
+    // Add listeners for puppeteer browser events
     scraper.on(events.puppeteer.browser.targetcreated, () => { });
     scraper.on(events.puppeteer.browser.targetchanged, () => { });
     scraper.on(events.puppeteer.browser.targetdestroyed, () => { });
     scraper.on(events.puppeteer.browser.disconnected, () => { });
 
-    // This will be executed on browser side
-    const descriptionProcessor = () => document.querySelector(".description__text")
-            .innerText
-            .replace(/[\s\n\r]+/g, " ")
-            .trim();
+    // Custom function executed on browser side to extract job description
+    const descriptionProcessor = () => (<HTMLElement>document.querySelector(".description__text")!)
+        .innerText
+        .replace(/[\s\n\r]+/g, " ")
+        .trim();
 
     // Run queries concurrently
     await Promise.all([
@@ -136,36 +119,29 @@ Each `LinkedinScraper` instance is associated with one browser (Chromium) instan
         * csp_report
         * imageset
  
-```js
+```ts
+import { LaunchOptions } from "puppeteer";
+
 /**
- * Constructor
+ * Main class
  * @extends EventEmitter
- * @param options {Object} Puppeteer browser options, for more informations see https://pptr.dev/#?product=Puppeteer&version=v2.0.0&show=api-puppeteerlaunchoptions
+ * @param options {LaunchOptions} Puppeteer launch options, for more informations see https://pptr.dev/#?product=Puppeteer&version=v2.0.0&show=api-puppeteerlaunchoptions
+ * @constructor
  */
-constructor(options) { }
+constructor(options: LaunchOptions) { }
 
 /**
  * Scrape linkedin jobs
- * @param queries Array[String] of queries
- * @param locations Array[String] of locations
- * @param [paginationMax] {Number} Max number of pagination
- * @param [descriptionProcessor] {Function} Custom function to extract job description on browser side
- * @param [optimize] {Boolean} Block resources such as images, stylesheets etc to improve bandwidth usage
+ * @param queries {string | Array<string>}
+ * @param locations {string | Array<string>}
+ * @param options {IRunOptions}
  * @returns {Promise<void>}
  */
-async run(
-    queries,
-    locations,
-    {
-        paginationMax,
-        descriptionProcessor,
-        optimize,
-    } = {
-        paginationMax: 10,
-        descriptionProcessor: null,
-        optimize: false,
-    },    
-) { }
+async run (
+    queries: string | Array<string>,
+    locations: string | Array<string>,
+    options: IRunOptions
+) => { }
 
 /**
 * Close browser instance
@@ -200,25 +176,6 @@ enableLoggerInfo() { }
  * @static
  */
 enableLoggerError() { } 
-```
-
-
-## Events
-```js
-// Emitted when a job is processed
-linkedinScraper.on("data", ({ query, location, link, title, company, place, description, }) => {});
- 
-// Emitted in case of an error
-linkedinScraper.on("error", (err) => {});
-
-// Emitted at the end of a run
-linkedinScraper.on("end", () => {});
-
-// Puppeteer browser events: for more informations see https://pptr.dev/#?product=Puppeteer&version=v2.0.0&show=api-class-browser
-linkedinScraper.on("disconnected", () => {});
-linkedinScraper.on("targetchanged", () => {});
-linkedinScraper.on("targetcreated", () => {});
-linkedinScraper.on("targetdestroyed", () => {});
 ```
   
 ## Logger

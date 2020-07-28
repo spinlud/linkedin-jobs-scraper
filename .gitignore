@@ -1,8 +1,8 @@
 **/.idea
 **/node_modules
-**/output*.txt
 **/output
 **/tmp
+**/build
 
 # General
 .DS_Store

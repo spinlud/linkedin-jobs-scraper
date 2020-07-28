@@ -1,4 +1,5 @@
-const debug = require("debug");
+import debug from "debug";
+
 const namespace = "scraper";
 
 const logger = {
@@ -24,4 +25,4 @@ if (!process.env.DEBUG) {
     logger.enable();
 }
 
-module.exports = logger;
+export { logger };

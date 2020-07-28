@@ -70,5 +70,6 @@
     "src/tests",
     "**/tmp",
     "**/examples",
+    "jest.config.js"
   ]
 }

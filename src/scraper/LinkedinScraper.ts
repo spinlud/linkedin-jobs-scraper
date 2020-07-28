@@ -37,7 +37,7 @@ const _loadJobDetails = async (
 
     while(!loaded) {
         loaded = await page.evaluate(
-            (jobTitle, jobCompany) => {
+            (jobTitle: string, jobCompany: string) => {
                 const jobHeaderRight = document.querySelector(".topcard__content-left") as HTMLElement;
                 return jobHeaderRight &&
                     jobHeaderRight.innerText.includes(jobTitle) &&
@@ -88,8 +88,8 @@ const _loadMoreJobs = async (
     while(!loaded) {
         if (!clicked) {
             clicked = await page.evaluate(
-                (seeMoreJobsSelector) => {
-                    const button = document.querySelector(seeMoreJobsSelector);
+                (seeMoreJobsSelector: string) => {
+                    const button = <HTMLElement>document.querySelector(seeMoreJobsSelector);
 
                     if (button) {
                         button.click();
@@ -104,7 +104,7 @@ const _loadMoreJobs = async (
         }
 
         loaded = await page.evaluate(
-            (linksSelector, jobLinksTot) => {
+            (linksSelector: string, jobLinksTot: number) => {
                 window.scrollTo(0, document.body.scrollHeight);
                 return document.querySelectorAll(linksSelector).length > jobLinksTot;
             },
@@ -353,7 +353,7 @@ class LinkedinScraper extends EventEmitter {
 
                 // Get number of all job links in the page
                 const jobLinksTot = await page.evaluate(
-                    linksSelector => document.querySelectorAll(linksSelector).length,
+                    (linksSelector: string) => document.querySelectorAll(linksSelector).length,
                     linksSelector
                 );
 
@@ -369,17 +369,17 @@ class LinkedinScraper extends EventEmitter {
                         // Extract job main fields
                         [jobTitle, jobCompany, jobPlace, jobDate] = await page.evaluate(
                             (
-                                linksSelector,
-                                companiesSelector,
-                                placesSelector,
-                                datesSelector,
-                                jobIndex
+                                linksSelector: string,
+                                companiesSelector: string,
+                                placesSelector: string,
+                                datesSelector: string,
+                                jobIndex: number
                             ) => {
                                 return [
-                                    document.querySelectorAll(linksSelector)[jobIndex].innerText,
-                                    document.querySelectorAll(companiesSelector)[jobIndex].innerText,
-                                    document.querySelectorAll(placesSelector)[jobIndex].innerText,
-                                    document.querySelectorAll(datesSelector)[jobIndex]
+                                    (<HTMLElement>document.querySelectorAll(linksSelector)[jobIndex]).innerText,
+                                    (<HTMLElement>document.querySelectorAll(companiesSelector)[jobIndex]).innerText,
+                                    (<HTMLElement>document.querySelectorAll(placesSelector)[jobIndex]).innerText,
+                                    (<HTMLElement>document.querySelectorAll(datesSelector)[jobIndex])
                                         .getAttribute('datetime')
                                 ];
                             },
@@ -392,11 +392,12 @@ class LinkedinScraper extends EventEmitter {
 
                         // Load job and extract description: skip in case of error
                         [[jobId, jobLink], loadJobDetailsResponse] = await Promise.all([
-                            page.evaluate((linksSelector, jobIndex) => {
-                                    const linkElem = document.querySelectorAll(linksSelector)[jobIndex];
+                            page.evaluate((linksSelector: string, jobIndex: number) => {
+                                    const linkElem = <HTMLElement>document.querySelectorAll(linksSelector)[jobIndex];
                                     linkElem.click();
+
                                     return [
-                                        linkElem.parentNode.getAttribute("data-id"),
+                                        (<HTMLElement>linkElem!.parentNode!).getAttribute("data-id"),
                                         linkElem.getAttribute("href"),
                                     ];
                                 },
@@ -404,7 +405,7 @@ class LinkedinScraper extends EventEmitter {
                                 jobIndex
                             ),
 
-                            _loadJobDetails(page, jobTitle, jobCompany),
+                            _loadJobDetails(page, jobTitle!, jobCompany!),
                         ]);
 
                         // Check if job details loading has failed
@@ -423,9 +424,9 @@ class LinkedinScraper extends EventEmitter {
                         else {
                             jobDescription = await page.evaluate(
                                 (
-                                    descriptionSelector,
+                                    descriptionSelector: string,
                                 ) => {
-                                    return document.querySelector(descriptionSelector).innerText;
+                                    return (<HTMLElement>document.querySelector(descriptionSelector)).innerText;
                                 },
                                 descriptionSelector
                             );
@@ -434,20 +435,21 @@ class LinkedinScraper extends EventEmitter {
                         // Extract job criteria fields
                         [jobSenorityLevel, jobFunction, jobEmploymentType, jobIndustries] = await page.evaluate(
                             (
-                                jobCriteriaSelector
+                                jobCriteriaSelector: string
                             ) => {
                                 const items = document.querySelectorAll(jobCriteriaSelector);
 
-                                const criterias = [
+                                const criteria = [
                                     'Seniority level',
                                     'Job function',
                                     'Employment type',
                                     'Industries'
                                 ];
 
-                                const nodeList = criterias.map(criteria => {
+                                const nodeList = criteria.map(criteria => {
                                     const el = Array.from(items)
-                                        .find(li => li.querySelector('h3').innerText === criteria);
+                                        .find(li =>
+                                            (<HTMLElement>li.querySelector('h3')).innerText === criteria);
 
                                     return el ? el.querySelectorAll('span') : [];
                                 });

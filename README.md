@@ -25,10 +25,10 @@ npm install --save linkedin-jobs-scraper
 
 
 ## Usage 
-```ts
-import { LinkedinScraper, events, IData } from "linkedin-jobs-scraper";
+```js
+const { LinkedinScraper, events, IData } = require('linkedin-jobs-scraper');
 
-(async () => {    
+(async () => {
     // Each scraper instance is associated with one browser.
     // Concurrent queries will run on different pages within the same browser instance.
     const scraper = new LinkedinScraper({
@@ -37,7 +37,7 @@ import { LinkedinScraper, events, IData } from "linkedin-jobs-scraper";
     });
 
     // Add listeners for scraper events
-    scraper.on(events.scraper.data, (data: IData) => {
+    scraper.on(events.scraper.data, (data) => {
         console.log(
             data.description.length,
             `Query='${data.query}'`,
@@ -54,17 +54,25 @@ import { LinkedinScraper, events, IData } from "linkedin-jobs-scraper";
         );
     });
 
-    scraper.on(events.scraper.error, (err) => { console.error(err); });
-    scraper.on(events.scraper.end, () => { console.log('All done!'); });
+    scraper.on(events.scraper.error, (err) => {
+        console.error(err);
+    });
+    scraper.on(events.scraper.end, () => {
+        console.log('All done!');
+    });
 
     // Add listeners for puppeteer browser events
-    scraper.on(events.puppeteer.browser.targetcreated, () => { });
-    scraper.on(events.puppeteer.browser.targetchanged, () => { });
-    scraper.on(events.puppeteer.browser.targetdestroyed, () => { });
-    scraper.on(events.puppeteer.browser.disconnected, () => { });
+    scraper.on(events.puppeteer.browser.targetcreated, () => {
+    });
+    scraper.on(events.puppeteer.browser.targetchanged, () => {
+    });
+    scraper.on(events.puppeteer.browser.targetdestroyed, () => {
+    });
+    scraper.on(events.puppeteer.browser.disconnected, () => {
+    });
 
     // Custom function executed on browser side to extract job description
-    const descriptionProcessor = () => (<HTMLElement>document.querySelector(".description__text")!)
+    const descriptionProcessor = () => document.querySelector(".description__text")
         .innerText
         .replace(/[\s\n\r]+/g, " ")
         .trim();
@@ -120,8 +128,6 @@ Each `LinkedinScraper` instance is associated with one browser (Chromium) instan
         * imageset
  
 ```ts
-import { LaunchOptions } from "puppeteer";
-
 /**
  * Main class
  * @extends EventEmitter

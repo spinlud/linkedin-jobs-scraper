@@ -11,7 +11,7 @@ import { LinkedinScraper, events, IData } from "..";
         slowMo: 10,
     });
 
-    // Listen for custom events
+    // Add listeners for scraper events
     scraper.on(events.scraper.data, (data: IData) => {
         console.log(
             data.description.length,
@@ -29,7 +29,6 @@ import { LinkedinScraper, events, IData } from "..";
         );
     });
 
-    // Add listeners for scraper events
     scraper.on(events.scraper.error, (err) => { console.error(err); });
     scraper.on(events.scraper.end, () => { console.log('\nE N D (ツ)_.\\m/') });
 

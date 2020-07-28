@@ -16,7 +16,12 @@ jobs:
       env: ALLOWED_TO_FAIL=true
       script: npm audit
 
+    - stage: test
+      env: DEBUG=scraper:*
+      script: npm run test
+
     - stage: deploy
+      script: npm run build
       deploy:
         edge: true
         provider: npm
@@ -27,4 +32,5 @@ jobs:
 
 stages:
   - audit
+  - test
   - deploy

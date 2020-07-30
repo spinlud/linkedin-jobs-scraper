@@ -1,10 +1,5 @@
 import { LaunchOptions } from "puppeteer";
-
-export interface IRunOptions {
-    paginationMax?: number; // Limit jobs pagination
-    descriptionProcessor?: () => string; // Custom function to extract job description on browser side
-    optimize?: boolean; // Block resources such as images, stylesheets etc to improve bandwidth usage
-}
+import { IRunOptions } from "./options";
 
 const runOptionsDefaults: IRunOptions = {
     paginationMax: 1,

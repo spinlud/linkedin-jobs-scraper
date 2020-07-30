@@ -2,9 +2,18 @@ import { EventEmitter } from "events";
 import puppeteer, { Browser, Page, LaunchOptions } from "puppeteer";
 import { events } from "./events";
 import { states } from "./states";
-import { runOptionsDefaults, browserDefaults, IRunOptions } from "./defaults";
+import { IRunOptions } from "./options";
+import { runOptionsDefaults, browserDefaults } from "./defaults";
 import { logger } from "../logger/logger";
 import { sleep } from "../utils/utils";
+import {
+    ERelevanceFilterOptions,
+    ETimeFilterOptions,
+    relevanceFilter,
+    timeFilter,
+    FilterFnOptions,
+    filterFn,
+} from "./filters";
 
 const url = "https://www.linkedin.com/jobs";
 const containerSelector = ".results__container.results__container--two-pane";
@@ -15,6 +24,8 @@ const placesSelector = ".job-result-card__location";
 const descriptionSelector = ".description__text";
 const seeMoreJobsSelector = "button.infinite-scroller__show-more-button";
 const jobCriteriaSelector = "li.job-criteria__item";
+const relevanceBtnSelector = `button[data-tracking-control-name=public_jobs_-dropdown]`
+const timeBtnSelector = `button[data-tracking-control-name=public_jobs_TIME_POSTED-dropdown]`
 
 /**
  * Wait for job details to load
@@ -131,7 +142,7 @@ const _loadMoreJobs = async (
 /**
  * Main class
  * @extends EventEmitter
- * @param options {Object} Puppeteer browser options, for more informations see https://pptr.dev/#?product=Puppeteer&version=v2.0.0&show=api-puppeteerlaunchoptions
+ * @param options {LaunchOptions} Puppeteer browser options, for more informations see https://pptr.dev/#?product=Puppeteer&version=v2.0.0&show=api-puppeteerlaunchoptions
  * @constructor
  */
 class LinkedinScraper extends EventEmitter {
@@ -217,12 +228,12 @@ class LinkedinScraper extends EventEmitter {
     private _run = async (
         queries: string | Array<string>,
         locations: string | Array<string>,
-        options: IRunOptions
+        options?: IRunOptions
     ) => {
         let tag;
-        let paginationMax = options.paginationMax || 1;
-        let descriptionProcessor = options.descriptionProcessor;
-        let optimize = !!options.optimize;
+        let paginationMax = options?.paginationMax || 1;
+        let descriptionProcessor = options?.descriptionProcessor;
+        let optimize = !!options?.optimize;
 
         if (!(typeof(queries) === "string" || Array.isArray(queries))) {
             throw new Error(`'queries' parameter must be string or Array`);
@@ -333,6 +344,49 @@ class LinkedinScraper extends EventEmitter {
             ]);
 
             logger.info(tag, "Search done");
+
+            // Apply filters (if any)
+            if (options?.filter) {
+                if (options?.filter.relevance && options?.filter.relevance !== ERelevanceFilterOptions.RELEVANT) {
+                    let filterFnOptions: FilterFnOptions = {
+                        dropdownBtnSelector: relevanceFilter.dropdownBtnSelector,
+                        choiceIndex: relevanceFilter.choices[options?.filter.relevance]
+                    };
+
+                    try {
+                        await Promise.all([
+                            page.evaluate(filterFn, filterFnOptions),
+                            page.waitForNavigation()
+                        ]);
+
+                        console.log(tag, `Successfully applied relevance filter (${options?.filter.relevance})`);
+                    }
+                    catch(err) {
+                        console.error(tag, err);
+                        process.exit(1);
+                    }
+                }
+
+                if (options?.filter.time && options?.filter.time !== ETimeFilterOptions.ANY) {
+                    let filterFnOptions: FilterFnOptions = {
+                        dropdownBtnSelector: timeFilter.dropdownBtnSelector,
+                        choiceIndex: timeFilter.choices[options?.filter.time]
+                    };
+
+                    try {
+                        await Promise.all([
+                            page.evaluate(filterFn, filterFnOptions),
+                            page.waitForNavigation()
+                        ]);
+
+                        console.log(tag, `Successfully applied time filter (${options?.filter.time})`);
+                    }
+                    catch(err) {
+                        console.error(tag, err);
+                        process.exit(1);
+                    }
+                }
+            }
 
             // Scroll down page to the bottom
             await page.evaluate(_ => {

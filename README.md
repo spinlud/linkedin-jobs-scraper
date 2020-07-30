@@ -11,6 +11,7 @@
 * [Installation](#installation)
 * [Usage](#usage)
 * [LinkedinScraper](#linkedinscraper)
+* [Filters](#filters)
 * [Logger](#logger)
 * [License](#license)
 
@@ -26,7 +27,13 @@ npm install --save linkedin-jobs-scraper
 
 ## Usage 
 ```js
-const { LinkedinScraper, events, IData } = require('linkedin-jobs-scraper');
+const { 
+    events,
+    IData,
+    LinkedinScraper,
+    ERelevanceFilterOptions,
+    ETimeFilterOptions
+} = require('linkedin-jobs-scraper');
 
 (async () => {
     // Each scraper instance is associated with one browser.
@@ -87,11 +94,15 @@ const { LinkedinScraper, events, IData } = require('linkedin-jobs-scraper');
             }
         ),
         scraper.run(
-            ["Developer", "Software Engineer"],
+            ["Cloud Engineer"],
             ["San Francisco", "New York"],
             {
                 paginationMax: 1,
                 descriptionProcessor,
+                filter: {
+                    relevance: ERelevanceFilterOptions.RECENT,
+                    time: ETimeFilterOptions.DAY,
+                },
                 optimize: true, // Block resources such as images, fonts etc to improve bandwidth usage
             }
         )
@@ -111,12 +122,13 @@ Each `LinkedinScraper` instance is associated with one browser (Chromium) instan
  For more information about browser events see: [puppeteer-browser-events](https://pptr.dev/#?product=Puppeteer&version=v2.0.0&show=api-class-browser).
  The main method is `run` which takes the following parameters:
  
-* `queries` required, must be a string or an array of strings
-* `locations` required, must be a string or an array of strings
-* Optional object with the following:
-    - `paginationMax` {Number} Maximum number of pagination
-    - `descriptionProcessor` {Function} Function executed on browser side (you have access to `window`, `document`, etc) to extract job description
-    - `optimize` {Boolean} Block resources such as images, stylesheets etc to improve bandwidth usage. Specifically the following resources are blocked:
+* `queries` {string | string[]} required.
+* `locations` {string | string[]} required.
+* [`options`] {IRunOptions} optional: 
+    - [`paginationMax`] {Number} Pagination limit.
+    - [`descriptionProcessor`] {Function} Function executed on browser side (you have access to `window`, `document`, etc) to extract job description.
+    - [`filter`] {Object} Filter options (see section [Filters](#filters) for nore details). 
+    - [`optimize`] {Boolean} Block resources such as images, stylesheets etc to improve bandwidth usage. Specifically the following resources are blocked:
         * image
         * stylesheet
         * media
@@ -140,13 +152,13 @@ constructor(options: LaunchOptions) { }
  * Scrape linkedin jobs
  * @param queries {string | Array<string>}
  * @param locations {string | Array<string>}
- * @param options {IRunOptions}
+ * @param [options] {IRunOptions}
  * @returns {Promise<void>}
  */
 async run (
     queries: string | Array<string>,
     locations: string | Array<string>,
-    options: IRunOptions
+    options?: IRunOptions
 ) => { }
 
 /**
@@ -182,6 +194,46 @@ enableLoggerInfo() { }
  * @static
  */
 enableLoggerError() { } 
+```
+
+## Filters
+It is possible to customize queries with the following filters:
+- RELEVANCE:
+    * `RELEVANT` most relevant.
+    * `RECENT` most recent.
+- TIME:
+    * `DAY` last 24 hours.
+    * `WEEK` last week.
+    * `MONTH` last month.
+    * `ANY` all results.
+    
+See the following example for more details:
+
+```js
+const { 
+    events,
+    IData,
+    LinkedinScraper,
+    ERelevanceFilterOptions,
+    ETimeFilterOptions
+} = require('linkedin-jobs-scraper');
+
+(async () => {
+    // [...]
+    
+    await scraper.run(
+        ["Cloud Engineer"],
+        ["San Francisco", "New York"],
+        {                
+            filter: {
+                relevance: ERelevanceFilterOptions.RECENT,
+                time: ETimeFilterOptions.DAY,
+            },                
+        }    
+    );
+
+    // [...]
+})();
 ```
   
 ## Logger

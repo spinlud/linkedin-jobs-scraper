@@ -1,11 +1,17 @@
-import { LinkedinScraper, events, IData } from "..";
+import {
+    events,
+    IData,
+    LinkedinScraper,
+    ERelevanceFilterOptions,
+    ETimeFilterOptions,
+} from "..";
 
 describe('[TEST]', () => {
     jest.setTimeout(240000);
 
     it('Should run and terminate', async () => {
         const scraper = new LinkedinScraper({
-            headless: true,
+            headless: false,
             slowMo: 15,
         });
 
@@ -33,14 +39,22 @@ describe('[TEST]', () => {
             .trim();
 
         await Promise.all([
-            scraper.run(['Designer', 'Architect'], 'Japan', { paginationMax: 1 }),
+            scraper.run(
+                ['Designer', 'Architect'],
+                'Japan',
+                { paginationMax: 1 }
+            ),
             scraper.run(
                 "Node.js",
                 "United Kingdom",
                 {
                     paginationMax: 2,
                     descriptionProcessor,
-                    optimize: true
+                    filter: {
+                        relevance: ERelevanceFilterOptions.RECENT,
+                        time: ETimeFilterOptions.DAY,
+                    },
+                    optimize: true,
                 }
             ),
         ]);

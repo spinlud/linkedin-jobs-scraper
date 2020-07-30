@@ -231,9 +231,10 @@ class LinkedinScraper extends EventEmitter {
         options?: IRunOptions
     ) => {
         let tag;
-        let paginationMax = options?.paginationMax || 1;
-        let descriptionProcessor = options?.descriptionProcessor;
-        let optimize = !!options?.optimize;
+        const paginationMax = options?.paginationMax || 1;
+        const descriptionProcessor = options?.descriptionProcessor;
+        const filter = options?.filter;
+        const optimize = !!options?.optimize;
 
         if (!(typeof(queries) === "string" || Array.isArray(queries))) {
             throw new Error(`'queries' parameter must be string or Array`);
@@ -257,6 +258,16 @@ class LinkedinScraper extends EventEmitter {
 
         if (!Array.isArray(locations)) {
             locations = [locations];
+        }
+
+        if (filter) {
+            if (filter.relevance && !(Object.keys(ERelevanceFilterOptions).some(e => e === filter.relevance))) {
+                throw new Error(`filter.relevance must be one of (${Object.keys(ERelevanceFilterOptions).join(', ')})`);
+            }
+
+            if (filter.time && !(Object.keys(ETimeFilterOptions).some(e => e === filter.time))) {
+                throw new Error(`filter.time must be one of (${Object.keys(ETimeFilterOptions).join(', ')})`);
+            }
         }
 
         if (!this._browser) {
@@ -346,11 +357,11 @@ class LinkedinScraper extends EventEmitter {
             logger.info(tag, "Search done");
 
             // Apply filters (if any)
-            if (options?.filter) {
-                if (options?.filter.relevance && options?.filter.relevance !== ERelevanceFilterOptions.RELEVANT) {
+            if (filter) {
+                if (filter.relevance && filter.relevance !== ERelevanceFilterOptions.RELEVANT) {
                     let filterFnOptions: FilterFnOptions = {
                         dropdownBtnSelector: relevanceFilter.dropdownBtnSelector,
-                        choiceIndex: relevanceFilter.choices[options?.filter.relevance]
+                        choiceIndex: relevanceFilter.choices[filter.relevance]
                     };
 
                     try {
@@ -359,7 +370,7 @@ class LinkedinScraper extends EventEmitter {
                             page.waitForNavigation()
                         ]);
 
-                        console.log(tag, `Successfully applied relevance filter (${options?.filter.relevance})`);
+                        console.log(tag, `Successfully applied relevance filter (${filter.relevance})`);
                     }
                     catch(err) {
                         console.error(tag, err);
@@ -367,10 +378,10 @@ class LinkedinScraper extends EventEmitter {
                     }
                 }
 
-                if (options?.filter.time && options?.filter.time !== ETimeFilterOptions.ANY) {
+                if (filter.time && filter.time !== ETimeFilterOptions.ANY) {
                     let filterFnOptions: FilterFnOptions = {
                         dropdownBtnSelector: timeFilter.dropdownBtnSelector,
-                        choiceIndex: timeFilter.choices[options?.filter.time]
+                        choiceIndex: timeFilter.choices[filter.time]
                     };
 
                     try {
@@ -379,7 +390,7 @@ class LinkedinScraper extends EventEmitter {
                             page.waitForNavigation()
                         ]);
 
-                        console.log(tag, `Successfully applied time filter (${options?.filter.time})`);
+                        console.log(tag, `Successfully applied time filter (${filter.time})`);
                     }
                     catch(err) {
                         console.error(tag, err);

@@ -24,8 +24,6 @@ const placesSelector = ".job-result-card__location";
 const descriptionSelector = ".description__text";
 const seeMoreJobsSelector = "button.infinite-scroller__show-more-button";
 const jobCriteriaSelector = "li.job-criteria__item";
-const relevanceBtnSelector = `button[data-tracking-control-name=public_jobs_-dropdown]`
-const timeBtnSelector = `button[data-tracking-control-name=public_jobs_TIME_POSTED-dropdown]`
 
 /**
  * Wait for job details to load

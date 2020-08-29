@@ -9,9 +9,9 @@ import {
 describe('[TEST]', () => {
     jest.setTimeout(240000);
 
-    it('Should run and terminate', async () => {
+    it('Should run and terminate graciously', async () => {
         const scraper = new LinkedinScraper({
-            headless: false,
+            headless: true,
             slowMo: 15,
         });
 

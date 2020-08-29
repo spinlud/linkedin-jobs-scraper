@@ -1,6 +1,5 @@
 import {
     events,
-    IData,
     LinkedinScraper,
     ERelevanceFilterOptions,
     ETimeFilterOptions,
@@ -15,7 +14,7 @@ describe('[TEST]', () => {
             slowMo: 15,
         });
 
-        scraper.on(events.scraper.data, (data: IData) => {
+        scraper.on(events.scraper.data, (data) => {
             expect(data.description).toBeDefined();
             expect(data.query).toBeDefined();
             expect(data.location).toBeDefined();
@@ -28,6 +27,14 @@ describe('[TEST]', () => {
             expect(data.jobFunction).toBeDefined();
             expect(data.employmentType).toBeDefined();
             expect(data.industries).toBeDefined();
+
+            expect(data.description.length).toBeGreaterThan(0);
+            expect(data.query.length).toBeGreaterThan(0);
+            expect(data.location.length).toBeGreaterThan(0);
+            expect(data.title.length).toBeGreaterThan(0);
+            expect(data.company.length).toBeGreaterThan(0);
+            expect(data.place.length).toBeGreaterThan(0);
+            expect(data.link.length).toBeGreaterThan(0);
         });
 
         scraper.on(events.scraper.error, (err) => { console.error(err); });

@@ -29,7 +29,6 @@ npm install --save linkedin-jobs-scraper
 ```js
 const { 
     events,
-    IData,
     LinkedinScraper,
     ERelevanceFilterOptions,
     ETimeFilterOptions
@@ -211,8 +210,7 @@ See the following example for more details:
 
 ```js
 const { 
-    events,
-    IData,
+    events,    
     LinkedinScraper,
     ERelevanceFilterOptions,
     ETimeFilterOptions

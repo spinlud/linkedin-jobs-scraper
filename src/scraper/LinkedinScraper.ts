@@ -1,6 +1,7 @@
 import { EventEmitter } from "events";
+import TypedEmitter from "typed-emitter";
 import puppeteer, { Browser, Page, LaunchOptions } from "puppeteer";
-import { events } from "./events";
+import { events, IEventListeners } from "./events";
 import { states } from "./states";
 import { IRunOptions } from "./options";
 import { runOptionsDefaults, browserDefaults } from "./defaults";
@@ -14,6 +15,9 @@ import {
     FilterFnOptions,
     filterFn,
 } from "./filters";
+import TypedEventEmitter from "typed-emitter";
+
+const TypedEventEmitter = new EventEmitter() as TypedEmitter<IEventListeners>;
 
 const url = "https://www.linkedin.com/jobs";
 const containerSelector = ".results__container.results__container--two-pane";
@@ -143,7 +147,7 @@ const _loadMoreJobs = async (
  * @param options {LaunchOptions} Puppeteer browser options, for more informations see https://pptr.dev/#?product=Puppeteer&version=v2.0.0&show=api-puppeteerlaunchoptions
  * @constructor
  */
-class LinkedinScraper extends EventEmitter {
+class LinkedinScraper extends (EventEmitter as new () => TypedEventEmitter<IEventListeners>) {
     private _browser: Browser | undefined = undefined;
     private _state = states.notInitialized;
 
@@ -152,6 +156,8 @@ class LinkedinScraper extends EventEmitter {
     constructor(options: LaunchOptions) {
         super();
         this.options = options;
+
+
     }
 
     /**
@@ -312,9 +318,8 @@ class LinkedinScraper extends EventEmitter {
             .map(q => (locations as Array<string>).map(l => [q, l]))
             .reduce((a, b) => a.concat(b));
 
-        let jobsProcessed = 0;
-
         for (const tuple of queriesXlocations) {
+            let jobsProcessed = 0;
             const [query, location] = tuple;
             tag = `[${query}][${location}]`;
 
@@ -424,8 +429,17 @@ class LinkedinScraper extends EventEmitter {
 
                 // Jobs loop
                 for (jobIndex; jobIndex < jobLinksTot; ++jobIndex) {
-                    let jobId, jobLink, jobTitle, jobCompany, jobPlace, jobDescription, jobDate;
-                    let jobSenorityLevel, jobFunction, jobEmploymentType, jobIndustries;
+                    let jobId;
+                    let jobLink;
+                    let jobTitle;
+                    let jobCompany;
+                    let jobPlace;
+                    let jobDescription;
+                    let jobDate;
+                    let jobSenorityLevel;
+                    let jobFunction;
+                    let jobEmploymentType;
+                    let jobIndustries;
                     let loadJobDetailsResponse;
 
                     try {
@@ -482,7 +496,8 @@ class LinkedinScraper extends EventEmitter {
 
                         // Use custom description processor if available
                         if (descriptionProcessor) {
-                            jobDescription = await page.evaluate(`(${descriptionProcessor.toString()})();`)
+                            jobDescription =
+                                await page.evaluate(`(${descriptionProcessor.toString()})();`) as string;
                         }
                         else {
                             jobDescription = await page.evaluate(
@@ -534,12 +549,12 @@ class LinkedinScraper extends EventEmitter {
                     this.emit(events.scraper.data, {
                         query: query,
                         location: location,
-                        link: jobLink,
-                        title: jobTitle,
-                        company: jobCompany,
-                        place: jobPlace,
-                        description: jobDescription,
-                        date: jobDate,
+                        link: jobLink!,
+                        title: jobTitle!,
+                        company: jobCompany!,
+                        place: jobPlace!,
+                        description: jobDescription!,
+                        date: jobDate!,
                         senorityLevel: jobSenorityLevel,
                         jobFunction: jobFunction,
                         employmentType: jobEmploymentType,

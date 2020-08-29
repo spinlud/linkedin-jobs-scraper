@@ -1,6 +1,6 @@
 {
   "name": "linkedin-jobs-scraper",
-  "version": "2.2.2",
+  "version": "2.3.0",
   "description": "Scrape public available job offers on Linkedin using headless browser",
   "main": "build/index.js",
   "types": "build/index.d.ts",
@@ -46,6 +46,7 @@
     "jest": "^26.4.2",
     "ts-jest": "^26.3.0",
     "ts-node": "^9.0.0",
+    "typed-emitter": "^1.3.0",
     "typescript": "^4.0.2"
   }
 }

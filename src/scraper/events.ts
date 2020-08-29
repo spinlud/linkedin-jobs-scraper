@@ -15,7 +15,23 @@ export interface IData {
     industries: string;
 }
 
-const events = {
+interface IEvents {
+    scraper: {
+        data: "scraper:data";
+        error: "scraper:error";
+        end: "scraper:end";
+    },
+    puppeteer: {
+        browser: {
+            disconnected: BrowserEvent;
+            targetchanged: BrowserEvent;
+            targetcreated: BrowserEvent;
+            targetdestroyed: BrowserEvent;
+        },
+    },
+}
+
+const events: IEvents = {
     scraper: {
         data: "scraper:data",
         error: "scraper:error",
@@ -30,5 +46,15 @@ const events = {
         },
     },
 };
+
+export interface IEventListeners {
+    ["scraper:data"]: (data: IData) => void;
+    ["scraper:error"]: (error: Error | string) => void;
+    ["scraper:end"]: () => void;
+    ["disconnected"]: (...args: any[]) => void;
+    ["targetchanged"]: (...args: any[]) => void;
+    ["targetcreated"]: (...args: any[]) => void;
+    ["targetdestroyed"]: (...args: any[]) => void;
+}
 
 export { events };

@@ -17,8 +17,6 @@ import {
 } from "./filters";
 import TypedEventEmitter from "typed-emitter";
 
-const TypedEventEmitter = new EventEmitter() as TypedEmitter<IEventListeners>;
-
 const url = "https://www.linkedin.com/jobs";
 const containerSelector = ".results__container.results__container--two-pane";
 const linksSelector = ".jobs-search__results-list li a.result-card__full-card-link";
@@ -147,7 +145,7 @@ const _loadMoreJobs = async (
  * @param options {LaunchOptions} Puppeteer browser options, for more informations see https://pptr.dev/#?product=Puppeteer&version=v2.0.0&show=api-puppeteerlaunchoptions
  * @constructor
  */
-class LinkedinScraper extends (EventEmitter as new () => TypedEventEmitter<IEventListeners>) {
+class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventListeners>) {
     private _browser: Browser | undefined = undefined;
     private _state = states.notInitialized;
 

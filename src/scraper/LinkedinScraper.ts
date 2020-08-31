@@ -473,6 +473,7 @@ class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventList
 
                         let jobId;
                         let jobLink;
+                        let jobApplyLink;
                         let jobTitle;
                         let jobCompany;
                         let jobPlace;
@@ -552,8 +553,19 @@ class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventList
                                 );
                             }
 
-                            // Extract job criteria fields
-                            [jobSenorityLevel, jobFunction, jobEmploymentType, jobIndustries] = await page.evaluate(
+                            // Extract apply link
+                            jobApplyLink = await page.evaluate((selector) => {
+                                const applyBtn = document.querySelector<HTMLElement>(selector);
+                                return applyBtn ? applyBtn.getAttribute("href") : null;
+                            }, selectors.applyLink);
+
+                            // Extract other job fields
+                            [
+                                jobSenorityLevel,
+                                jobFunction,
+                                jobEmploymentType,
+                                jobIndustries,
+                            ] = await page.evaluate(
                                 (
                                     jobCriteriaSelector: string
                                 ) => {
@@ -592,6 +604,7 @@ class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventList
                             query: query.query || "",
                             location: location,
                             link: jobLink!,
+                            ...jobApplyLink && { applyLink: jobApplyLink },
                             title: jobTitle!,
                             company: jobCompany!,
                             place: jobPlace!,

@@ -34,6 +34,14 @@ describe('[TEST]', () => {
             expect(data.company.length).toBeGreaterThan(0);
             expect(data.place.length).toBeGreaterThan(0);
             expect(data.link.length).toBeGreaterThan(0);
+
+            expect(() => new URL(data.link)).not.toThrow();
+
+            if (data.applyLink) {
+                expect(() => new URL(data.applyLink!)).not.toThrow();
+            }
+
+            console.log(data.applyLink);
         });
 
         scraper.on(events.scraper.error, (err) => { console.error(err); });

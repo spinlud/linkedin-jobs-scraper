@@ -4,6 +4,7 @@ export interface IData {
     query: string;
     location: string;
     link: string;
+    applyLink?: string;
     title: string;
     company: string;
     place: string;

@@ -1,14 +1,10 @@
 import { LaunchOptions } from "puppeteer";
-import { IRunOptions } from "./options";
-
-const runOptionsDefaults: IRunOptions = {
-    paginationMax: 1,
-    optimize: false,
-};
+import { IQueryOptions } from "./query";
 
 const browserDefaults: LaunchOptions = {
     headless: true,
     args: [
+        // `--window-size=${1920},${1080}`,
         "--lang=en-GB",
         "--no-sandbox",
         "--disable-setuid-sandbox",
@@ -20,4 +16,10 @@ const browserDefaults: LaunchOptions = {
     slowMo: 10,
 };
 
-export { runOptionsDefaults, browserDefaults };
+const queryOptionsDefault: IQueryOptions = {
+    locations: ["Worldwide"],
+    limit: 25,
+    optmize: true,
+};
+
+export { browserDefaults, queryOptionsDefault };

@@ -1,6 +1,10 @@
-export * from "./LinkedinScraper";
-export * from "./events";
+export { LinkedinScraper } from "./LinkedinScraper";
+
 export {
     ERelevanceFilterOptions,
-    ETimeFilterOptions
+    ETimeFilterOptions,
+    EJobTypeFilterOptions,
+    EExperienceLevelOptions,
 } from "./filters";
+
+export { events } from "./events";

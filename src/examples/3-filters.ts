@@ -1,47 +1,42 @@
-import {events, IData, LinkedinScraper} from "..";
-import { ERelevanceFilterOptions, ETimeFilterOptions } from "../scraper/filters";
+import {
+    LinkedinScraper,
+    ERelevanceFilterOptions,
+    ETimeFilterOptions,
+    EJobTypeFilterOptions,
+    EExperienceLevelOptions,
+    events,
+} from "..";
 
 (async () => {
+    // Each scraper instance is associated with one browser.
+    // Concurrent queries will run on different pages within the same browser instance.
     const scraper = new LinkedinScraper({
-        headless: false,
+        headless: true,
         slowMo: 10,
     });
 
     // Add listeners for scraper events
-    scraper.on(events.scraper.data, (data: IData) => {
-        console.log(
-            data.description.length,
-            `Query='${data.query}'`,
-            `Location='${data.location}'`,
-            `Title='${data.title}'`,
-            `Company='${data.company}'`,
-            `Place='${data.place}'`,
-            `Date='${data.date}'`,
-            `Link='${data.link}'`,
-            `senorityLevel='${data.senorityLevel}'`,
-            `function='${data.jobFunction}'`,
-            `employmentType='${data.employmentType}'`,
-            `industries='${data.industries}'`,
-        );
+    scraper.on(events.scraper.data, (data) => {
+        console.log(data.company, data.title);
     });
 
-    scraper.on(events.scraper.error, (err) => { console.error(err); });
-    scraper.on(events.scraper.end, () => { console.log('\nE N D (ツ)_.\\m/') });
-
-    // Run queries concurrently
-    await Promise.all([
-        scraper.run(
-            "Sound Engineer",
-            ["New York"],
-            {
-                paginationMax: 2,
-                filter: {
-                    relevance: ERelevanceFilterOptions.RECENT,
-                    time: ETimeFilterOptions.MONTH
-                }
+    await scraper.run({
+        query: "",
+        options: {
+            filters: {
+                // See documentation on how find this url
+                companyJobsUrl: "https://www.linkedin.com/jobs/search/?f_C=1441%2C17876832%2C791962%2C2374003%2C18950635%2C16140%2C10440912&geoId=92000000&lipi=urn%3Ali%3Apage%3Acompanies_company_jobs_jobs%3BcbFm1gYoRwy%2FxVRQWbGyKw%3D%3D&licu=urn%3Ali%3Acontrol%3Ad_flagship3_company-see_all_jobs",
+                relevance: ERelevanceFilterOptions.RELEVANT,
+                time: ETimeFilterOptions.MONTH,
+                // type: EJobTypeFilterOptions.FULL_TIME,
+                // experience: EExperienceLevelOptions.MID_SENIOR,
             }
-        )
-    ]);
+        }
+    }, {
+        optmize: true,
+        locations: ["United States"],
+        limit: 10,
+    });
 
     // Close browser
     await scraper.close();

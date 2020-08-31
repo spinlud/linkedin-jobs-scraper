@@ -1,8 +1,8 @@
 import {
-    events,
     LinkedinScraper,
-    ERelevanceFilterOptions,
     ETimeFilterOptions,
+    ERelevanceFilterOptions,
+    events
 } from "..";
 
 describe('[TEST]', () => {
@@ -11,7 +11,7 @@ describe('[TEST]', () => {
     it('Should run and terminate graciously', async () => {
         const scraper = new LinkedinScraper({
             headless: true,
-            slowMo: 15,
+            slowMo: 12,
         });
 
         scraper.on(events.scraper.data, (data) => {
@@ -29,7 +29,6 @@ describe('[TEST]', () => {
             expect(data.industries).toBeDefined();
 
             expect(data.description.length).toBeGreaterThan(0);
-            expect(data.query.length).toBeGreaterThan(0);
             expect(data.location.length).toBeGreaterThan(0);
             expect(data.title.length).toBeGreaterThan(0);
             expect(data.company.length).toBeGreaterThan(0);
@@ -40,30 +39,53 @@ describe('[TEST]', () => {
         scraper.on(events.scraper.error, (err) => { console.error(err); });
         scraper.on(events.scraper.end, () => { console.log('\nE N D (ツ)_.\\m/') });
 
-        const descriptionProcessor = () => (<HTMLElement>document.querySelector(".description__text")!)
+        const descriptionFn = () => (<HTMLElement>document.querySelector(".description__text")!)
             .innerText
             .replace(/[\s\n\r]+/g, " ")
             .trim();
 
         await Promise.all([
-            scraper.run(
-                ['Designer', 'Architect'],
-                'Japan',
-                { paginationMax: 1 }
-            ),
-            scraper.run(
-                "Node.js",
-                "United Kingdom",
-                {
-                    paginationMax: 2,
-                    descriptionProcessor,
-                    filter: {
-                        relevance: ERelevanceFilterOptions.RECENT,
-                        time: ETimeFilterOptions.DAY,
+            scraper.run([
+                    {
+                        query: "",
+                        options: {
+                            optmize: false,
+                            limit: 53,
+                            descriptionFn: descriptionFn
+                        },
                     },
-                    optimize: true,
+                    {
+                        query: "Designer",
+                        options: {
+                            limit: 27,
+                            descriptionFn: descriptionFn
+                        },
+                    },
+                ], {
+                    filters: {
+                        time: ETimeFilterOptions.MONTH
+                    }
                 }
             ),
+
+            scraper.run(
+                {
+                    query: 'Software Engineer',
+                    options: {
+                        filters: {
+                            companyJobsUrl: "https://www.linkedin.com/jobs/search/?f_C=1441%2C17876832%2C791962%2C2374003%2C18950635%2C16140%2C10440912&geoId=92000000&lipi=urn%3Ali%3Apage%3Acompanies_company_jobs_jobs%3BeNiQUtwuSk6JsASF9SoGAw%3D%3D&licu=urn%3Ali%3Acontrol%3Ad_flagship3_company-see_all_jobs",
+                        },
+                        descriptionFn: descriptionFn
+                    },
+                },
+                {
+                    limit: 33,
+                    locations: ["United States", "United Kingdom"],
+                    filters: {
+                        relevance: ERelevanceFilterOptions.RECENT,
+                    }
+                }
+            )
         ]);
 
         await scraper.close();

@@ -1,143 +1,18 @@
 import { EventEmitter } from "events";
 import TypedEmitter from "typed-emitter";
-import puppeteer, { Browser, Page, LaunchOptions } from "puppeteer";
+import puppeteer from "puppeteer-extra";
+import { Browser, BrowserContext, Page, LaunchOptions } from "puppeteer";
 import { events, IEventListeners } from "./events";
 import { states } from "./states";
-import { IRunOptions } from "./options";
-import { runOptionsDefaults, browserDefaults } from "./defaults";
+import { browserDefaults, queryOptionsDefault } from "./defaults";
 import { logger } from "../logger/logger";
 import { sleep } from "../utils/utils";
-import {
-    ERelevanceFilterOptions,
-    ETimeFilterOptions,
-    relevanceFilter,
-    timeFilter,
-    FilterFnOptions,
-    filterFn,
-} from "./filters";
-import TypedEventEmitter from "typed-emitter";
+import { getQueryParams } from "../utils/url";
+import { urls, selectors } from "./constants";
+import { IQuery, IQueryOptions, IQueryValidationError } from "./query";
+import { getRandomUserAgent } from "../utils/browser";
 
-const url = "https://www.linkedin.com/jobs";
-const containerSelector = ".results__container.results__container--two-pane";
-const linksSelector = ".jobs-search__results-list li a.result-card__full-card-link";
-const datesSelector = 'time';
-const companiesSelector = ".result-card__subtitle.job-result-card__subtitle";
-const placesSelector = ".job-result-card__location";
-const descriptionSelector = ".description__text";
-const seeMoreJobsSelector = "button.infinite-scroller__show-more-button";
-const jobCriteriaSelector = "li.job-criteria__item";
-
-/**
- * Wait for job details to load
- * @param page {Page}
- * @param jobTitle {string}
- * @param jobCompany {string}
- * @param timeout {number}
- * @returns {Promise<{success: boolean, error?: string}>}
- * @private
- */
-const _loadJobDetails = async (
-    page: Page,
-    jobTitle: string,
-    jobCompany: string,
-    timeout: number = 2000
-) => {
-    const waitTime = 10;
-    let elapsed = 0;
-    let loaded = false;
-
-    while(!loaded) {
-        loaded = await page.evaluate(
-            (jobTitle: string, jobCompany: string) => {
-                const jobHeaderRight = document.querySelector(".topcard__content-left") as HTMLElement;
-                return jobHeaderRight &&
-                    jobHeaderRight.innerText.includes(jobTitle) &&
-                    jobHeaderRight.innerText.includes(jobCompany);
-            },
-            jobTitle,
-            jobCompany
-        );
-
-        if (loaded) return { success: true };
-
-        await sleep(waitTime);
-        elapsed += waitTime;
-
-        if (elapsed >= timeout) {
-            return {
-                success: false,
-                error: `Timeout on loading job: '${jobTitle}'`
-            };
-        }
-    }
-
-    return { success: true };
-};
-
-/**
- * Try to load more jobs
- * @param page {Page}
- * @param seeMoreJobsSelector {string}
- * @param linksSelector {string}
- * @param jobLinksTot {number}
- * @param timeout {number}
- * @returns {Promise<{success: boolean, error?: string}>}
- * @private
- */
-const _loadMoreJobs = async (
-    page: Page,
-    seeMoreJobsSelector: string,
-    linksSelector: string,
-    jobLinksTot: number,
-    timeout: number = 2000
-) => {
-    const waitTime = 10;
-    let elapsed = 0;
-    let loaded = false;
-    let clicked = false;
-
-    while(!loaded) {
-        if (!clicked) {
-            clicked = await page.evaluate(
-                (seeMoreJobsSelector: string) => {
-                    const button = <HTMLElement>document.querySelector(seeMoreJobsSelector);
-
-                    if (button) {
-                        button.click();
-                        return true;
-                    }
-                    else {
-                        return false;
-                    }
-                },
-                seeMoreJobsSelector
-            );
-        }
-
-        loaded = await page.evaluate(
-            (linksSelector: string, jobLinksTot: number) => {
-                window.scrollTo(0, document.body.scrollHeight);
-                return document.querySelectorAll(linksSelector).length > jobLinksTot;
-            },
-            linksSelector,
-            jobLinksTot
-        );
-
-        if (loaded) return { success: true };
-
-        await sleep(waitTime);
-        elapsed += waitTime;
-
-        if (elapsed >= timeout) {
-            return {
-                success: false,
-                error: `Timeout on fetching more jobs`
-            };
-        }
-    }
-
-    return { success: true };
-};
+puppeteer.use(require("puppeteer-extra-plugin-stealth")());
 
 /**
  * Main class
@@ -147,6 +22,7 @@ const _loadMoreJobs = async (
  */
 class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventListeners>) {
     private _browser: Browser | undefined = undefined;
+    private _context: BrowserContext | undefined = undefined;
     private _state = states.notInitialized;
 
     public options: LaunchOptions;
@@ -154,8 +30,6 @@ class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventList
     constructor(options: LaunchOptions) {
         super();
         this.options = options;
-
-
     }
 
     /**
@@ -187,6 +61,119 @@ class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventList
     public static enableLoggerError = () => logger.enableError();
 
     /**
+     * Wait for job details to load
+     * @param page {Page}
+     * @param jobTitle {string}
+     * @param jobCompany {string}
+     * @param timeout {number}
+     * @returns {Promise<{success: boolean, error?: string}>}
+     * @static
+     * @private
+     */
+    private static _loadJobDetails = async (
+        page: Page,
+        jobTitle: string,
+        jobCompany: string,
+        timeout: number = 2000
+    ): Promise<{ success: boolean, error?: string }> => {
+        const waitTime = 10;
+        let elapsed = 0;
+        let loaded = false;
+
+        while(!loaded) {
+            loaded = await page.evaluate(
+                (jobTitle: string, jobCompany: string) => {
+                    const jobHeaderRight = document.querySelector(".topcard__content-left") as HTMLElement;
+                    return jobHeaderRight &&
+                        jobHeaderRight.innerText.includes(jobTitle) &&
+                        jobHeaderRight.innerText.includes(jobCompany);
+                },
+                jobTitle,
+                jobCompany
+            );
+
+            if (loaded) return { success: true };
+
+            await sleep(waitTime);
+            elapsed += waitTime;
+
+            if (elapsed >= timeout) {
+                return {
+                    success: false,
+                    error: `Timeout on loading job: '${jobTitle}'`
+                };
+            }
+        }
+
+        return { success: true };
+    };
+
+    /**
+     * Try to load more jobs
+     * @param page {Page}
+     * @param jobLinksTot {number}
+     * @param timeout {number}
+     * @returns {Promise<{success: boolean, error?: string}>}
+     * @private
+     */
+    private static _loadMoreJobs = async (
+        page: Page,
+        jobLinksTot: number,
+        timeout: number = 2000
+    ): Promise<{ success: boolean, error?: string }> => {
+        const waitTime = 10;
+        let elapsed = 0;
+        let loaded = false;
+        let clicked = false;
+
+        await page.evaluate(_ => {
+            window.scrollTo(0, document.body.scrollHeight)
+        });
+
+        while(!loaded) {
+            if (!clicked) {
+                clicked = await page.evaluate(
+                    (selector: string) => {
+                        const button = <HTMLElement>document.querySelector(selector);
+
+                        if (button) {
+                            button.click();
+                            return true;
+                        }
+                        else {
+                            return false;
+                        }
+                    },
+                    selectors.seeMoreJobs
+                );
+            }
+
+            loaded = await page.evaluate(
+                (selector: string, jobLinksTot: number) => {
+                    window.scrollTo(0, document.body.scrollHeight);
+                    return document.querySelectorAll(selector).length > jobLinksTot;
+                },
+                selectors.links,
+                jobLinksTot
+            );
+
+            if (loaded) return { success: true };
+
+            await sleep(waitTime);
+            elapsed += waitTime;
+
+            if (elapsed >= timeout) {
+                return {
+                    success: false,
+                    error: `Timeout on loading more jobs`
+                };
+            }
+        }
+
+        return { success: true };
+    };
+
+    /**
      * Initialize browser
      * @private
      */
@@ -199,6 +186,8 @@ class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventList
             ...browserDefaults,
             ...this.options,
         });
+
+        this._context = await this._browser.createIncognitoBrowserContext();
 
         this._browser.on(events.puppeteer.browser.disconnected, () => {
             this.emit(events.puppeteer.browser.disconnected);
@@ -220,376 +209,431 @@ class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventList
     }
 
     /**
-     * Scrape linkedin jobs
-     * @param queries {string | Array<string>}
-     * @param locations {string | Array<string>}
-     * @param options {IRunOptions}
-     * @returns {Promise<void>}
+     * Validate query
+     * @param {IQuery} query
+     * @returns {IQueryValidationError[]}
      * @private
      */
+    private _validateQuery(query: IQuery): IQueryValidationError[] {
+        const errors: IQueryValidationError[] = [];
+
+        if (query.query && typeof(query.query) !== "string") {
+            errors.push({
+                param: "query",
+                reason: `Must be a string`
+            });
+        }
+
+        if (query.options) {
+            const {
+                locations,
+                filters,
+                descriptionFn,
+                limit,
+            } = query.options;
+
+            if (locations && (!Array.isArray(locations) || !locations.every(e => typeof(e) === "string"))) {
+                errors.push({
+                    param: "options.locations",
+                    reason: `Must be an array of strings`
+                });
+            }
+
+            if (descriptionFn && typeof(descriptionFn) !== "function") {
+                errors.push({
+                    param: "options.descriptionFn",
+                    reason: `Must be a function`
+                });
+            }
+
+            if (query.options.hasOwnProperty("optimize") && typeof(query.options.optmize) !== "boolean") {
+                errors.push({
+                    param: "options.optimize",
+                    reason: `Must be a boolean`
+                });
+            }
+
+            if (limit && (!Number.isInteger(limit) || limit <= 0)) {
+                errors.push({
+                    param: "options.limit",
+                    reason: `Must be a positive integer`
+                });
+            }
+
+            if (filters) {
+                if (filters.companyJobsUrl) {
+                    if (typeof(filters.companyJobsUrl) !== "string") {
+                        errors.push({
+                            param: "options.filters.companyUrl",
+                            reason: `Must be a string`
+                        });
+                    }
+
+                    try {
+                        const baseUrl = "https://www.linkedin.com/jobs/search/?";
+                        new URL(filters.companyJobsUrl); // CHeck url validity
+                        const queryParams = getQueryParams(filters.companyJobsUrl);
+
+                        if (!filters.companyJobsUrl.toLowerCase().startsWith(baseUrl)
+                            || !queryParams.hasOwnProperty("f_C") || !queryParams["f_C"]) {
+                            errors.push({
+                                param: "options.filters.companyJobsUrl",
+                                reason: `Url is invalid. Please check the documentation on how find a company jobs link from LinkedIn`
+                            });
+                        }
+                    }
+                    catch(err) {
+                        errors.push({
+                            param: "options.filters.companyJobsUrl",
+                            reason: `Must be a valid url`
+                        });
+                    }
+                }
+            }
+        }
+
+        return errors;
+    }
+
+    /**
+     * Build jobs search url
+     * @param {string} query
+     * @param {string} location
+     * @param {IQueryOptions} options
+     * @returns {string}
+     * @private
+     */
+    private _buildSearchUrl = (query: string, location: string, options: IQueryOptions): string => {
+        const url = new URL(urls.jobsSearch);
+
+        if (query && query.length) {
+            url.searchParams.append("keywords", query);
+        }
+
+        if (location && location.length) {
+            url.searchParams.append("location", location);
+        }
+
+        if (options && options.filters) {
+            if (options.filters.companyJobsUrl) {
+                const queryParams = getQueryParams(options.filters.companyJobsUrl);
+                url.searchParams.append("f_C", queryParams["f_C"]);
+            }
+
+            if (options.filters.relevance) {
+                url.searchParams.append("sortBy", options.filters.relevance);
+            }
+
+            if (options.filters.time && options.filters.time.length) {
+                url.searchParams.append("f_TP", options.filters.time);
+            }
+
+            if (options.filters.type) {
+                url.searchParams.append("f_JT", options.filters.type);
+            }
+
+            if (options.filters.experience) {
+                url.searchParams.append("f_E", options.filters.experience);
+            }
+        }
+
+        url.searchParams.append("redirect", "false");
+        url.searchParams.append("position", "1");
+        url.searchParams.append("pageNum", "0");
+
+        return url.href;
+    }
+
+    /**
+     * Scrape linkedin jobs
+     */
     private _run = async (
-        queries: string | Array<string>,
-        locations: string | Array<string>,
-        options?: IRunOptions
-    ) => {
+        queries: IQuery | IQuery[],
+        options?: IQueryOptions
+    ): Promise<void> => {
         let tag;
-        const paginationMax = options?.paginationMax || 1;
-        const descriptionProcessor = options?.descriptionProcessor;
-        const filter = options?.filter;
-        const optimize = !!options?.optimize;
-
-        if (!(typeof(queries) === "string" || Array.isArray(queries))) {
-            throw new Error(`'queries' parameter must be string or Array`);
-        }
-
-        if (!(typeof(locations) === "string" || Array.isArray(locations))) {
-            throw new Error(`'locations' parameter must be string or Array`);
-        }
-
-        if (!(Number.isInteger(paginationMax) && paginationMax > 0)) {
-            throw new Error(`'paginationMax' must be a positive integer`);
-        }
-
-        if (descriptionProcessor && typeof(descriptionProcessor) !== "function") {
-            throw new Error(`'descriptionProcessor' must be a function`)
-        }
 
         if (!Array.isArray(queries)) {
             queries = [queries];
         }
 
-        if (!Array.isArray(locations)) {
-            locations = [locations];
-        }
+        // Validation
+        for (const query of queries) {
+            const errors = this._validateQuery(query);
 
-        if (filter) {
-            if (filter.relevance && !(Object.keys(ERelevanceFilterOptions).some(e => e === filter.relevance))) {
-                throw new Error(`filter.relevance must be one of (${Object.keys(ERelevanceFilterOptions).join(', ')})`);
-            }
-
-            if (filter.time && !(Object.keys(ETimeFilterOptions).some(e => e === filter.time))) {
-                throw new Error(`filter.time must be one of (${Object.keys(ETimeFilterOptions).join(', ')})`);
+            if (errors.length) {
+                logger.error(errors);
+                process.exit(1);
             }
         }
 
+        // Initialize browser
         if (!this._browser) {
             await this._initialize();
         }
 
-        const page = await this._browser!.newPage();
+        // Queries loop
+        for (const query of queries) {
+            // Merge options
+            query.options = {
+                ...queryOptionsDefault,
+                ...options,
+                ...query.options
+            };
 
-        // Resources we don't want to load to improve bandwidth usage
-        if (optimize) {
-            await page.setRequestInterception(true);
+            // Locations loop
+            for (const location of query.options!.locations!) {
+                let jobsProcessed = 0;
+                tag = `[${query.query}][${location}]`;
+                logger.info(tag, `Starting new query:`, `query="${query.query}"`, `location="${location}"`);
 
-            const resourcesToBlock = [
-                "image",
-                "stylesheet",
-                "media",
-                "font",
-                "texttrack",
-                "object",
-                "beacon",
-                "csp_report",
-                "imageset",
-            ];
+                // Open new page in incognito context
+                const page = await this._context!.newPage();
 
-            page.on("request", request => {
-                if (
-                    resourcesToBlock.some(r => request.resourceType() === r)
-                    || request.url().includes(".jpg")
-                    || request.url().includes(".jpeg")
-                    || request.url().includes(".png")
-                    || request.url().includes(".gif")
-                    || request.url().includes(".css")
-                ) {
-                    request.abort();
+                // Set a random user agent
+                await page.setUserAgent(getRandomUserAgent());
+
+                // Enable optimization if required
+                if (query.options!.optmize) {
+                    await page.setRequestInterception(true);
+
+                    const resourcesToBlock = [
+                        "image",
+                        "stylesheet",
+                        "media",
+                        "font",
+                        "texttrack",
+                        "object",
+                        "beacon",
+                        "csp_report",
+                        "imageset",
+                    ];
+
+                    page.on("request", request => {
+                        if (
+                            resourcesToBlock.some(r => request.resourceType() === r)
+                            || request.url().includes(".jpg")
+                            || request.url().includes(".jpeg")
+                            || request.url().includes(".png")
+                            || request.url().includes(".gif")
+                            || request.url().includes(".css")
+                        ) {
+                            request.abort();
+                        }
+                        else {
+                            request.continue();
+                        }
+                    });
                 }
                 else {
-                    request.continue();
-                }
-            });
-        }
-
-        // Array([query, location])
-        const queriesXlocations = queries
-            .map(q => (locations as Array<string>).map(l => [q, l]))
-            .reduce((a, b) => a.concat(b));
-
-        for (const tuple of queriesXlocations) {
-            let jobsProcessed = 0;
-            const [query, location] = tuple;
-            tag = `[${query}][${location}]`;
-
-            logger.info(tag, `Query="${query}"`, `Location="${location}"`);
-
-            // Open url
-            await page.goto(url, {
-                waitUntil: 'networkidle0',
-            });
-
-            logger.info(tag, "Page loaded");
-
-            // Wait form search input selectors
-            await Promise.all([
-                page.waitForSelector("form#JOBS", {timeout: 10000}),
-                page.waitForSelector(`button[form="JOBS"]`, {timeout: 10000})
-            ]);
-
-            // Clear search inputs
-            await page.evaluate(() =>
-                (<HTMLInputElement>document.querySelector(`form#JOBS input[name="keywords"]`)).value = "");
-            await page.evaluate(() =>
-                (<HTMLInputElement>document.querySelector(`form#JOBS input[name="location"]`)).value = "");
-
-            // Fill search inputs
-            await page.type(`form#JOBS input[name="keywords"]`, query);
-            await page.type(`form#JOBS input[name="location"]`, location);
-
-            // Wait submit button
-            await page.focus(`button[form="JOBS"]`);
-
-            // Submit search
-            await Promise.all([
-                page.keyboard.press("Enter"),
-                page.waitForNavigation(),
-            ]);
-
-            logger.info(tag, "Search done");
-
-            // Apply filters (if any)
-            if (filter) {
-                if (filter.relevance && filter.relevance !== ERelevanceFilterOptions.RELEVANT) {
-                    let filterFnOptions: FilterFnOptions = {
-                        dropdownBtnSelector: relevanceFilter.dropdownBtnSelector,
-                        choiceIndex: relevanceFilter.choices[filter.relevance]
-                    };
-
-                    try {
-                        await Promise.all([
-                            page.evaluate(filterFn, filterFnOptions),
-                            page.waitForNavigation()
-                        ]);
-
-                        console.log(tag, `Successfully applied relevance filter (${filter.relevance})`);
-                    }
-                    catch(err) {
-                        console.error(tag, err);
-                        process.exit(1);
-                    }
+                    await page.setRequestInterception(false);
                 }
 
-                if (filter.time && filter.time !== ETimeFilterOptions.ANY) {
-                    let filterFnOptions: FilterFnOptions = {
-                        dropdownBtnSelector: timeFilter.dropdownBtnSelector,
-                        choiceIndex: timeFilter.choices[filter.time]
-                    };
+                // Build search url
+                const searchUrl = this._buildSearchUrl(query.query || "", location, query.options!);
 
-                    try {
-                        await Promise.all([
-                            page.evaluate(filterFn, filterFnOptions),
-                            page.waitForNavigation()
-                        ]);
+                await page.goto(searchUrl, {
+                    waitUntil: 'networkidle0',
+                });
 
-                        console.log(tag, `Successfully applied time filter (${filter.time})`);
-                    }
-                    catch(err) {
-                        console.error(tag, err);
-                        process.exit(1);
-                    }
+                // Scroll down page to the bottom
+                await page.evaluate(_ => {
+                    window.scrollTo(0, document.body.scrollHeight)
+                });
+
+                // Wait for lazy loading jobs
+                try {
+                    await page.waitForSelector(selectors.container, { timeout: 5000 });
                 }
-            }
+                catch(err) {
+                    logger.info(tag, `No jobs found, skip`);
+                    continue;
+                }
 
-            // Scroll down page to the bottom
-            await page.evaluate(_ => {
-                window.scrollTo(0, document.body.scrollHeight)
-            });
+                let jobIndex = 0;
 
-            // Wait for lazy loading jobs
-            await page.waitForSelector(containerSelector);
+                // Pagination loop
+                while (jobIndex < query.options!.limit!) {
+                    // Get number of all job links in the page
+                    const jobLinksTot = await page.evaluate(
+                        (linksSelector: string) => document.querySelectorAll(linksSelector).length,
+                        selectors.links
+                    );
 
-            let jobIndex = 0;
+                    if (jobLinksTot === 0) {
+                        logger.info(tag, `No jobs found, skip`);
+                        break;
+                    }
 
-            // Scroll until there are no more job postings to visit or paginationMax is reached
-            let paginationIndex = 0;
+                    logger.info(tag, "Jobs fetched: " + jobLinksTot);
 
-            // Pagination loop
-            while (++paginationIndex <= paginationMax) {
-                tag = `[${query}][${location}][${paginationIndex}]`;
+                    // Jobs loop
+                    for (jobIndex; jobIndex < jobLinksTot; ++jobIndex) {
+                        tag = `[${query.query}][${location}][${jobIndex + 1}]`;
 
-                // Get number of all job links in the page
-                const jobLinksTot = await page.evaluate(
-                    (linksSelector: string) => document.querySelectorAll(linksSelector).length,
-                    linksSelector
-                );
+                        let jobId;
+                        let jobLink;
+                        let jobTitle;
+                        let jobCompany;
+                        let jobPlace;
+                        let jobDescription;
+                        let jobDate;
+                        let jobSenorityLevel;
+                        let jobFunction;
+                        let jobEmploymentType;
+                        let jobIndustries;
+                        let loadJobDetailsResponse;
 
-                logger.info(tag, "Job postings fetched: " + jobLinksTot);
-
-                // Jobs loop
-                for (jobIndex; jobIndex < jobLinksTot; ++jobIndex) {
-                    let jobId;
-                    let jobLink;
-                    let jobTitle;
-                    let jobCompany;
-                    let jobPlace;
-                    let jobDescription;
-                    let jobDate;
-                    let jobSenorityLevel;
-                    let jobFunction;
-                    let jobEmploymentType;
-                    let jobIndustries;
-                    let loadJobDetailsResponse;
-
-                    try {
-                        // Extract job main fields
-                        [jobTitle, jobCompany, jobPlace, jobDate] = await page.evaluate(
-                            (
-                                linksSelector: string,
-                                companiesSelector: string,
-                                placesSelector: string,
-                                datesSelector: string,
-                                jobIndex: number
-                            ) => {
-                                return [
-                                    (<HTMLElement>document.querySelectorAll(linksSelector)[jobIndex]).innerText,
-                                    (<HTMLElement>document.querySelectorAll(companiesSelector)[jobIndex]).innerText,
-                                    (<HTMLElement>document.querySelectorAll(placesSelector)[jobIndex]).innerText,
-                                    (<HTMLElement>document.querySelectorAll(datesSelector)[jobIndex])
-                                        .getAttribute('datetime')
-                                ];
-                            },
-                            linksSelector,
-                            companiesSelector,
-                            placesSelector,
-                            datesSelector,
-                            jobIndex
-                        );
-
-                        // Load job and extract description: skip in case of error
-                        [[jobId, jobLink], loadJobDetailsResponse] = await Promise.all([
-                            page.evaluate((linksSelector: string, jobIndex: number) => {
-                                    const linkElem = <HTMLElement>document.querySelectorAll(linksSelector)[jobIndex];
-                                    linkElem.click();
-
+                        try {
+                            // Extract job main fields
+                            [jobTitle, jobCompany, jobPlace, jobDate] = await page.evaluate(
+                                (
+                                    linksSelector: string,
+                                    companiesSelector: string,
+                                    placesSelector: string,
+                                    datesSelector: string,
+                                    jobIndex: number
+                                ) => {
                                     return [
-                                        (<HTMLElement>linkElem!.parentNode!).getAttribute("data-id"),
-                                        linkElem.getAttribute("href"),
+                                        (<HTMLElement>document.querySelectorAll(linksSelector)[jobIndex]).innerText,
+                                        (<HTMLElement>document.querySelectorAll(companiesSelector)[jobIndex]).innerText,
+                                        (<HTMLElement>document.querySelectorAll(placesSelector)[jobIndex]).innerText,
+                                        (<HTMLElement>document.querySelectorAll(datesSelector)[jobIndex])
+                                            .getAttribute('datetime')
                                     ];
                                 },
-                                linksSelector,
+                                selectors.links,
+                                selectors.companies,
+                                selectors.places,
+                                selectors.dates,
                                 jobIndex
-                            ),
+                            );
 
-                            _loadJobDetails(page, jobTitle!, jobCompany!),
-                        ]);
+                            // Load job and extract description: skip in case of error
+                            [[jobId, jobLink], loadJobDetailsResponse] = await Promise.all([
+                                page.evaluate((linksSelector: string, jobIndex: number) => {
+                                        const linkElem = <HTMLElement>document.querySelectorAll(linksSelector)[jobIndex];
+                                        linkElem.click();
 
-                        // Check if job details loading has failed
-                        if (!loadJobDetailsResponse.success) {
-                            const errorMessage = `${tag}\t${loadJobDetailsResponse.error}`;
-                            logger.error(errorMessage);
+                                        return [
+                                            (<HTMLElement>linkElem!.parentNode!).getAttribute("data-id"),
+                                            linkElem.getAttribute("href"),
+                                        ];
+                                    },
+                                    selectors.links,
+                                    jobIndex
+                                ),
+
+                                LinkedinScraper._loadJobDetails(page, jobTitle!, jobCompany!),
+                            ]);
+
+                            // Check if job details loading has failed
+                            if (!loadJobDetailsResponse.success) {
+                                const errorMessage = `${tag}\t${loadJobDetailsResponse.error}`;
+                                logger.error(errorMessage);
+                                this.emit(events.scraper.error, errorMessage);
+
+                                continue;
+                            }
+
+                            // Use custom description function if available
+                            if (query.options?.descriptionFn) {
+                                jobDescription =
+                                    await page.evaluate(`(${query.options.descriptionFn.toString()})();`) as string;
+                            }
+                            else {
+                                jobDescription = await page.evaluate(
+                                    (
+                                        descriptionSelector: string,
+                                    ) => {
+                                        return (<HTMLElement>document.querySelector(descriptionSelector)).innerText;
+                                    },
+                                    selectors.description
+                                );
+                            }
+
+                            // Extract job criteria fields
+                            [jobSenorityLevel, jobFunction, jobEmploymentType, jobIndustries] = await page.evaluate(
+                                (
+                                    jobCriteriaSelector: string
+                                ) => {
+                                    const items = document.querySelectorAll(jobCriteriaSelector);
+
+                                    const criteria = [
+                                        'Seniority level',
+                                        'Job function',
+                                        'Employment type',
+                                        'Industries'
+                                    ];
+
+                                    const nodeList = criteria.map(criteria => {
+                                        const el = Array.from(items)
+                                            .find(li =>
+                                                (<HTMLElement>li.querySelector('h3')).innerText === criteria);
+
+                                        return el ? el.querySelectorAll('span') : [];
+                                    });
+
+                                    return Array.from(nodeList)
+                                        .map(spanList => Array.from(spanList as Array<HTMLElement>)
+                                            .map(e => e.innerText).join(', '));
+                                },
+                                selectors.jobCriteria
+                            );
+                        }
+                        catch(err) {
+                            const errorMessage = `${tag}\t${err.message}`;
                             this.emit(events.scraper.error, errorMessage);
-
                             continue;
                         }
 
-                        // Use custom description processor if available
-                        if (descriptionProcessor) {
-                            jobDescription =
-                                await page.evaluate(`(${descriptionProcessor.toString()})();`) as string;
-                        }
-                        else {
-                            jobDescription = await page.evaluate(
-                                (
-                                    descriptionSelector: string,
-                                ) => {
-                                    return (<HTMLElement>document.querySelector(descriptionSelector)).innerText;
-                                },
-                                descriptionSelector
-                            );
-                        }
+                        // Emit data
+                        this.emit(events.scraper.data, {
+                            query: query.query || "",
+                            location: location,
+                            link: jobLink!,
+                            title: jobTitle!,
+                            company: jobCompany!,
+                            place: jobPlace!,
+                            description: jobDescription!,
+                            date: jobDate!,
+                            senorityLevel: jobSenorityLevel,
+                            jobFunction: jobFunction,
+                            employmentType: jobEmploymentType,
+                            industries: jobIndustries,
+                        });
 
-                        // Extract job criteria fields
-                        [jobSenorityLevel, jobFunction, jobEmploymentType, jobIndustries] = await page.evaluate(
-                            (
-                                jobCriteriaSelector: string
-                            ) => {
-                                const items = document.querySelectorAll(jobCriteriaSelector);
+                        jobsProcessed++;
+                        logger.info(tag, `Processed`);
 
-                                const criteria = [
-                                    'Seniority level',
-                                    'Job function',
-                                    'Employment type',
-                                    'Industries'
-                                ];
-
-                                const nodeList = criteria.map(criteria => {
-                                    const el = Array.from(items)
-                                        .find(li =>
-                                            (<HTMLElement>li.querySelector('h3')).innerText === criteria);
-
-                                    return el ? el.querySelectorAll('span') : [];
-                                });
-
-                                return Array.from(nodeList)
-                                    .map(spanList => Array.from(spanList as Array<HTMLElement>)
-                                        .map(e => e.innerText).join(', '));
-                            },
-                            jobCriteriaSelector
-                        );
-                    }
-                    catch(err) {
-                        const errorMessage = `${tag}\t${err.message}`;
-                        this.emit(events.scraper.error, errorMessage);
-                        continue;
+                        // Check if we reached the limit of jobs to process
+                        if (jobIndex === query.options!.limit! - 1) break;
                     }
 
-                    // Emit data
-                    this.emit(events.scraper.data, {
-                        query: query,
-                        location: location,
-                        link: jobLink!,
-                        title: jobTitle!,
-                        company: jobCompany!,
-                        place: jobPlace!,
-                        description: jobDescription!,
-                        date: jobDate!,
-                        senorityLevel: jobSenorityLevel,
-                        jobFunction: jobFunction,
-                        employmentType: jobEmploymentType,
-                        industries: jobIndustries,
-                    });
+                    // Check if we reached the limit of jobs to process
+                    if (jobIndex === query.options!.limit! - 1) break;
 
-                    jobsProcessed++;
-                    logger.info(tag, `Processed job ${jobsProcessed}`);
+                    // Check if there are more jobs to load
+                    logger.info(tag, "Checking for new jobs to load...");
+
+                    const loadMoreJobsResponse = await LinkedinScraper._loadMoreJobs(
+                        page,
+                        jobLinksTot
+                    );
+
+                    // Check if loading jobs has failed
+                    if (!loadMoreJobsResponse.success) {
+                        logger.info(tag, "There are no more jobs available for the current query");
+                        break;
+                    }
+
+                    await sleep(500);
                 }
 
-                if (paginationIndex === paginationMax) break;
-
-                // Check if there are more job postings to load
-                logger.info(tag, "Checking for new job postings to fetch...");
-
-                const loadMoreResponse = await _loadMoreJobs(
-                    page,
-                    seeMoreJobsSelector,
-                    linksSelector,
-                    jobLinksTot
-                );
-
-                // Check it loading job postings has failed
-                if (!loadMoreResponse.success) {
-                    const errorMessage = `${tag}\t${loadMoreResponse.error}`;
-                    logger.error(errorMessage);
-                    this.emit(events.scraper.error, errorMessage);
-
-                    break;
-                }
-
-                await sleep(500);
+                // Close page
+                page && await page.close();
             }
         }
-
-        // Close page
-        await page.close();
 
         // Emit end event
         this.emit(events.scraper.end);
@@ -597,15 +641,10 @@ class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventList
 
     /**
      * Scrape linkedin jobs
-     * @param queries {string | Array<string>}
-     * @param locations {string | Array<string>}
-     * @param options {IRunOptions}
-     * @returns {Promise<void>}
      */
     public run = async (
-        queries: string | Array<string>,
-        locations: string | Array<string>,
-        options: IRunOptions = runOptionsDefaults
+        queries: IQuery | IQuery[],
+        options?: IQueryOptions
     ) => {
         try {
             if (this._state === states.notInitialized) {
@@ -628,7 +667,6 @@ class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventList
 
             await this._run(
                 queries,
-                locations,
                 options
             );
         }

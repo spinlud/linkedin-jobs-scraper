@@ -1,18 +1,16 @@
-import { LinkedinScraper, events, IData } from "..";
+import {
+    LinkedinScraper,
+    events,
+} from "..";
 
 (async () => {
-    // Programatically disable logger
-    setTimeout(() => LinkedinScraper.disableLogger(), 5000);
-
-    // Each scraper instance is associated with one browser.
-    // Concurrent queries will run on different pages within the same browser instance.
     const scraper = new LinkedinScraper({
         headless: true,
         slowMo: 10,
     });
 
     // Add listeners for scraper events
-    scraper.on(events.scraper.data, (data: IData) => {
+    scraper.on(events.scraper.data, (data) => {
         console.log(
             data.description.length,
             `Query='${data.query}'`,
@@ -38,23 +36,16 @@ import { LinkedinScraper, events, IData } from "..";
     scraper.on(events.puppeteer.browser.targetdestroyed, () => { });
     scraper.on(events.puppeteer.browser.disconnected, () => { });
 
-    // Run queries concurrently
-    await Promise.all([
-        scraper.run(
-            "Graphic Designer",
-            ["Berlin", "London"],
-            {
-                paginationMax: 2,
-            }
-        ),
-        scraper.run(
-            ["Developer", "Software Engineer"],
-            ["San Francisco", "New York"],
-            {
-                paginationMax: 1,
-            }
-        ),
-    ]);
+    await scraper.run({
+        query: "Graphic Designer",
+        options: {
+            locations: ["London"], // This will override the global options
+        }
+    }, {
+        optmize: true,
+        locations: ["New York"],
+        limit: 33,
+    });
 
     // Close browser
     await scraper.close();

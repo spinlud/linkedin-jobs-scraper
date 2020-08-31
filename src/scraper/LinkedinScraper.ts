@@ -346,6 +346,10 @@ class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventList
 
     /**
      * Scrape linkedin jobs
+     * @param {IQuery | IQuery[]} queries
+     * @param {IQueryOptions} [options]
+     * @return {Promise<void>}
+     * @private
      */
     private _run = async (
         queries: IQuery | IQuery[],
@@ -662,11 +666,14 @@ class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventList
 
     /**
      * Scrape linkedin jobs
+     * @param {IQuery | IQuery[]} queries
+     * @param {IQueryOptions} [options]
+     * @return {Promise<void>}
      */
     public run = async (
         queries: IQuery | IQuery[],
         options?: IQueryOptions
-    ) => {
+    ): Promise<void> => {
         try {
             if (this._state === states.notInitialized) {
                 await this._initialize();

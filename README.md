@@ -1,8 +1,8 @@
 # linkedin-jobs-scraper
 > Scrape public available job offers on Linkedin using headless browser (account credentials are not required).
 > It is possible to run different queries on different locations concurrently. 
-> For each job the following data fields are extracted: `title`, `company`, `place`, `date`, `link`, `description`, 
-> `senorityLevel`, `jobFunction`, `employmentType`, `industries`.
+> For each job the following data fields are extracted: `title`, `company`, `place`, `date`, `link`, `applyLink`,
+> `description`, `descriptionHTML`, `senorityLevel`, `jobFunction`, `employmentType`, `industries`.
 
 ## Table of Contents
 
@@ -12,6 +12,7 @@
 * [Usage](#usage)
 * [LinkedinScraper](#linkedinscraper)
 * [Filters](#filters)
+* [Company filter](#company-filter)
 * [Logger](#logger)
 * [License](#license)
 
@@ -28,11 +29,13 @@ npm install --save linkedin-jobs-scraper
 ## Usage 
 ```js
 const { 
-    events,
     LinkedinScraper,
     ERelevanceFilterOptions,
-    ETimeFilterOptions
-} = require('linkedin-jobs-scraper');
+    ETimeFilterOptions,
+    EJobTypeFilterOptions,
+    EExperienceLevelOptions,
+    events,
+} = require("linkedin-jobs-scraper");
 
 (async () => {
     // Each scraper instance is associated with one browser.
@@ -46,6 +49,7 @@ const {
     scraper.on(events.scraper.data, (data) => {
         console.log(
             data.description.length,
+            data.descriptionHTML.length,
             `Query='${data.query}'`,
             `Location='${data.location}'`,
             `Title='${data.title}'`,
@@ -53,6 +57,7 @@ const {
             `Place='${data.place}'`,
             `Date='${data.date}'`,
             `Link='${data.link}'`,
+            `applyLink='${data.applyLink ? data.applyLink : "N/A"}'`,
             `senorityLevel='${data.senorityLevel}'`,
             `function='${data.jobFunction}'`,
             `employmentType='${data.employmentType}'`,
@@ -78,33 +83,42 @@ const {
     });
 
     // Custom function executed on browser side to extract job description
-    const descriptionProcessor = () => document.querySelector(".description__text")
+    const descriptionFn = () => document.querySelector(".description__text")
         .innerText
         .replace(/[\s\n\r]+/g, " ")
         .trim();
 
-    // Run queries concurrently
-    await Promise.all([
-        scraper.run(
-            "Graphic Designer",
-            "London",
-            {
-                paginationMax: 2,
+    // Run queries concurrently    
+    await Promise.all([        
+        scraper.run({
+            query: "Graphic Designer",
+            options: {
+                locations: ["London"],
+                descriptionFn: descriptionFn,
+                filters: {                    
+                    relevance: ERelevanceFilterOptions.RELEVANT,
+                    time: ETimeFilterOptions.MONTH,                    
+                }
             }
-        ),
-        scraper.run(
-            ["Cloud Engineer"],
-            ["San Francisco", "New York"],
+        }),
+    
+        // Run queries serially
+        scraper.run([
             {
-                paginationMax: 1,
-                descriptionProcessor,
-                filter: {
-                    relevance: ERelevanceFilterOptions.RECENT,
-                    time: ETimeFilterOptions.DAY,
-                },
-                optimize: true, // Block resources such as images, fonts etc to improve bandwidth usage
-            }
-        )
+                query: "Engineer",
+                locations: ["Germany"], // This will override global option locations ([New York])                
+            },
+            {
+                query: "Sales",
+                options: {                    
+                    limit: 10, // This will override global option limit (33)
+                }
+            },
+        ], { // Global options for this run, will be merged individually with each query options (if any)
+            locations: ["New York"],
+            optmize: true,
+            limit: 33,
+        }),
     ]);
 
     // Close browser
@@ -121,12 +135,11 @@ Each `LinkedinScraper` instance is associated with one browser (Chromium) instan
  For more information about browser events see: [puppeteer-browser-events](https://pptr.dev/#?product=Puppeteer&version=v2.0.0&show=api-class-browser).
  The main method is `run` which takes the following parameters:
  
-* `queries` {string | string[]} required.
-* `locations` {string | string[]} required.
-* [`options`] {IRunOptions} optional: 
-    - [`paginationMax`] {Number} Pagination limit.
-    - [`descriptionProcessor`] {Function} Function executed on browser side (you have access to `window`, `document`, etc) to extract job description.
-    - [`filter`] {Object} Filter options (see section [Filters](#filters) for nore details). 
+* `queries` {IQuery | IQuery[]} required.
+* [`options`] {IQueryOptions} optional: 
+    - [`limit`] {Number} Number of jobs to retrieve per `query-location`.
+    - [`descriptionFn`] {Function} Function executed on browser side (you have access to `window`, `document`, etc) to extract job description.
+    - [`filters`] {Object} Filter options (see section [Filters](#filters) for more details). 
     - [`optimize`] {Boolean} Block resources such as images, stylesheets etc to improve bandwidth usage. Specifically the following resources are blocked:
         * image
         * stylesheet
@@ -149,16 +162,14 @@ constructor(options: LaunchOptions) { }
 
 /**
  * Scrape linkedin jobs
- * @param queries {string | Array<string>}
- * @param locations {string | Array<string>}
- * @param [options] {IRunOptions}
- * @returns {Promise<void>}
+ * @param {IQuery | IQuery[]} queries
+ * @param {IQueryOptions} [options]
+ * @return {Promise<void>}
  */
 async run (
-    queries: string | Array<string>,
-    locations: string | Array<string>,
-    options?: IRunOptions
-) => { }
+    queries: IQuery | IQuery[],
+    options?: IQueryOptions
+) { }
 
 /**
 * Close browser instance
@@ -198,40 +209,86 @@ enableLoggerError() { }
 ## Filters
 It is possible to customize queries with the following filters:
 - RELEVANCE:
-    * `RELEVANT` most relevant.
-    * `RECENT` most recent.
+    * `RELEVANT`
+    * `RECENT`
 - TIME:
-    * `DAY` last 24 hours.
-    * `WEEK` last week.
-    * `MONTH` last month.
-    * `ANY` all results.
+    * `DAY`
+    * `WEEK`
+    * `MONTH`
+    * `ANY`
+- JOB TYPE:
+    * `FULL_TIME`
+    * `PART_TIME`
+    * `TEMPORARY`
+    * `CONTRACT`
+- EXPERIENCE LEVEL:
+    * `INTERNSHIP`
+    * `ENTRY_LEVEL`
+    * `ASSOCIATE`
+    * `MID_SENIOR`
+    * `DIRECTOR`
     
 See the following example for more details:
 
 ```js
 const { 
-    events,    
     LinkedinScraper,
     ERelevanceFilterOptions,
-    ETimeFilterOptions
-} = require('linkedin-jobs-scraper');
+    ETimeFilterOptions,
+    EJobTypeFilterOptions,
+    EExperienceLevelOptions,
+    events,
+} = require("linkedin-jobs-scraper");
 
 (async () => {
     // [...]
     
-    await scraper.run(
-        ["Cloud Engineer"],
-        ["San Francisco", "New York"],
-        {                
-            filter: {
-                relevance: ERelevanceFilterOptions.RECENT,
-                time: ETimeFilterOptions.DAY,
-            },                
-        }    
-    );
+    await scraper.run({
+            query: "",
+            options: {
+                filters: {                    
+                    relevance: ERelevanceFilterOptions.RELEVANT,
+                    time: ETimeFilterOptions.MONTH,
+                    type: EJobTypeFilterOptions.FULL_TIME,
+                    experience: EExperienceLevelOptions.MID_SENIOR,
+                }
+            }
+        }, {
+            optmize: true,
+            locations: ["United States"],
+            limit: 10,
+        });
 
     // [...]
 })();
+```
+
+### Company Filter
+
+It is also possible to filter by company using the public company jobs url on LinkedIn. To find this url you have to:
+ 1. Login to LinkedIn using an account of your choice.
+ 2. Go to the LinkedIn page of the company you are interested in (e.g. [https://www.linkedin.com/company/google](https://www.linkedin.com/company/google)).
+ 3. Click on `jobs` from the left menu.
+ ![](images/img1.png)
+ 4. Scroll down and locate `See all jobs` or `See jobs` button.
+ ![](images/img2.png)
+ 5. Right click and copy link address (or navigate the link and copy form the address bar).
+ 6. Paste the copy address in code as follows:
+ 
+```js
+// [...]
+
+await scraper.run({
+    query: "",
+    options: {
+        filters: {        
+            // Copy link address here    
+            companyJobsUrl: "https://www.linkedin.com/jobs/search/?f_C=1441%2C17876832%2C791962%2C2374003%2C18950635%2C16140%2C10440912&geoId=92000000&lipi=urn%3Ali%3Apage%3Acompanies_company_jobs_jobs%3BcbFm1gYoRwy%2FxVRQWbGyKw%3D%3D&licu=urn%3Ali%3Acontrol%3Ad_flagship3_company-see_all_jobs",            
+        }
+    }
+});
+
+// [...]
 ```
   
 ## Logger

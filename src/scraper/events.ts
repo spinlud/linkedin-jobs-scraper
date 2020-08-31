@@ -10,6 +10,7 @@ export interface IData {
     place: string;
     date: string;
     description: string;
+    descriptionHTML: string;
     senorityLevel: string;
     jobFunction: string;
     employmentType: string;

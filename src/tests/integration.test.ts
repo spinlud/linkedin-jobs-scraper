@@ -15,33 +15,33 @@ describe('[TEST]', () => {
         });
 
         scraper.on(events.scraper.data, (data) => {
-            expect(data.description).toBeDefined();
             expect(data.query).toBeDefined();
             expect(data.location).toBeDefined();
             expect(data.title).toBeDefined();
             expect(data.company).toBeDefined();
             expect(data.place).toBeDefined();
             expect(data.date).toBeDefined();
+            expect(data.description).toBeDefined();
+            expect(data.descriptionHTML).toBeDefined();
             expect(data.link).toBeDefined();
             expect(data.senorityLevel).toBeDefined();
             expect(data.jobFunction).toBeDefined();
             expect(data.employmentType).toBeDefined();
             expect(data.industries).toBeDefined();
 
-            expect(data.description.length).toBeGreaterThan(0);
             expect(data.location.length).toBeGreaterThan(0);
             expect(data.title.length).toBeGreaterThan(0);
             expect(data.company.length).toBeGreaterThan(0);
             expect(data.place.length).toBeGreaterThan(0);
             expect(data.link.length).toBeGreaterThan(0);
+            expect(data.description.length).toBeGreaterThan(0);
+            expect(data.descriptionHTML.length).toBeGreaterThan(0);
 
             expect(() => new URL(data.link)).not.toThrow();
 
             if (data.applyLink) {
                 expect(() => new URL(data.applyLink!)).not.toThrow();
             }
-
-            console.log(data.applyLink);
         });
 
         scraper.on(events.scraper.error, (err) => { console.error(err); });

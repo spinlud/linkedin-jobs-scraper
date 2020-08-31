@@ -478,6 +478,7 @@ class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventList
                         let jobCompany;
                         let jobPlace;
                         let jobDescription;
+                        let jobDescriptionHTML;
                         let jobDate;
                         let jobSenorityLevel;
                         let jobFunction;
@@ -539,15 +540,21 @@ class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventList
 
                             // Use custom description function if available
                             if (query.options?.descriptionFn) {
-                                jobDescription =
-                                    await page.evaluate(`(${query.options.descriptionFn.toString()})();`) as string;
+                                [jobDescription, jobDescriptionHTML] = await Promise.all([
+                                    page.evaluate(`(${query.options.descriptionFn.toString()})();`),
+                                    // page.evaluate((selector) => {
+                                    //     return new XMLSerializer()
+                                    //         .serializeToString((<HTMLElement>document.querySelector(selector)));
+                                    page.evaluate((selector) => {
+                                        return (<HTMLElement>document.querySelector(selector)).outerHTML;
+                                    }, selectors.description)
+                                ]);
                             }
                             else {
-                                jobDescription = await page.evaluate(
-                                    (
-                                        descriptionSelector: string,
-                                    ) => {
-                                        return (<HTMLElement>document.querySelector(descriptionSelector)).innerText;
+                                [jobDescription, jobDescriptionHTML] = await page.evaluate((selector) => {
+                                        const el = (<HTMLElement>document.querySelector(selector));
+                                        // return [el.innerText, new XMLSerializer().serializeToString(el)];
+                                        return [el.innerText, el.outerHTML];
                                     },
                                     selectors.description
                                 );
@@ -608,7 +615,8 @@ class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventList
                             title: jobTitle!,
                             company: jobCompany!,
                             place: jobPlace!,
-                            description: jobDescription!,
+                            description: jobDescription! as string,
+                            descriptionHTML: jobDescriptionHTML! as string,
                             date: jobDate!,
                             senorityLevel: jobSenorityLevel,
                             jobFunction: jobFunction,

@@ -272,8 +272,8 @@ It is also possible to filter by company using the public company jobs url on Li
  ![](images/img1.png)
  4. Scroll down and locate `See all jobs` or `See jobs` button.
  ![](images/img2.png)
- 5. Right click and copy link address (or navigate the link and copy form the address bar).
- 6. Paste the copy address in code as follows:
+ 5. Right click and copy link address (or navigate the link and copy it from the address bar).
+ 6. Paste the link address in code as follows:
  
 ```js
 // [...]

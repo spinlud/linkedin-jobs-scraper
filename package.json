@@ -1,6 +1,6 @@
 {
   "name": "linkedin-jobs-scraper",
-  "version": "3.0.3",
+  "version": "3.0.4",
   "description": "Scrape public available job offers on Linkedin using headless browser",
   "main": "build/index.js",
   "types": "build/index.d.ts",
@@ -24,8 +24,7 @@
     "puppeteer": "^5.2.1",
     "puppeteer-extra": "^3.1.15",
     "puppeteer-extra-plugin-stealth": "^2.6.1",
-    "random-useragent": "^0.4.0",
-    "tree-kill": "^1.2.2"
+    "random-useragent": "^0.4.0"
   },
   "keywords": [
     "scraper",

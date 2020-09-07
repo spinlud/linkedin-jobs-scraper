@@ -11,7 +11,6 @@ import { getQueryParams } from "../utils/url";
 import { urls, selectors } from "./constants";
 import { IQuery, IQueryOptions, IQueryValidationError } from "./query";
 import { getRandomUserAgent } from "../utils/browser";
-import treeKill from "tree-kill";
 
 puppeteer.use(require("puppeteer-extra-plugin-stealth")());
 
@@ -713,7 +712,6 @@ class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventList
         try {
             if (this._browser) {
                 this._browser.removeAllListeners() && await this._browser.close();
-                treeKill(this._browser.process().pid, "SIGKILL");
             }
         }
         finally {

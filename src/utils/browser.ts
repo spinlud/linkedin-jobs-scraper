@@ -2,14 +2,14 @@ const randomUserAgent = require("random-useragent");
 
 const browsers = [
     "Chrome",
-    "Firefox",
-    "Safari",
+    // "Firefox",
+    // "Safari",
 ];
 
 const folders = [
     "/Browsers - Linux",
     "/Browsers - Mac",
-    "Browsers - Windows",
+    // "Browsers - Windows",
 ];
 
 const getRandomUserAgent = (): string => {

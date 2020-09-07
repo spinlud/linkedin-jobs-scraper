@@ -57,7 +57,7 @@ describe('[TEST]', () => {
                     {
                         query: "",
                         options: {
-                            optmize: false,
+                            optimize: false,
                             limit: 53,
                             descriptionFn: descriptionFn
                         },

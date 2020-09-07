@@ -28,7 +28,7 @@ import {
             descriptionFn: descriptionFn,
         }
     }, {
-        optmize: true,
+        optimize: true,
         locations: ["New York"],
         limit: 33,
     });

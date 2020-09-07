@@ -116,7 +116,7 @@ const {
             },
         ], { // Global options for this run, will be merged individually with each query options (if any)
             locations: ["New York"],
-            optmize: true,
+            optimize: true,
             limit: 33,
         }),
     ]);
@@ -254,7 +254,7 @@ const {
                 }
             }
         }, {
-            optmize: true,
+            optimize: true,
             locations: ["United States"],
             limit: 10,
         });

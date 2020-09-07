@@ -21,7 +21,7 @@ export interface IQueryOptions {
         experience?: EExperienceLevelOptions;
     },
     descriptionFn?: () => string;
-    optmize?: boolean;
+    optimize?: boolean;
 }
 
 export interface IQueryValidationError {

@@ -11,6 +11,7 @@ import { getQueryParams } from "../utils/url";
 import { urls, selectors } from "./constants";
 import { IQuery, IQueryOptions, IQueryValidationError } from "./query";
 import { getRandomUserAgent } from "../utils/browser";
+import treeKill from "tree-kill";
 
 puppeteer.use(require("puppeteer-extra-plugin-stealth")());
 
@@ -246,7 +247,7 @@ class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventList
                 });
             }
 
-            if (query.options.hasOwnProperty("optimize") && typeof(query.options.optmize) !== "boolean") {
+            if (query.options.hasOwnProperty("optimize") && typeof(query.options.optimize) !== "boolean") {
                 errors.push({
                     param: "options.optimize",
                     reason: `Must be a boolean`
@@ -398,7 +399,7 @@ class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventList
                 await page.setUserAgent(getRandomUserAgent());
 
                 // Enable optimization if required
-                if (query.options!.optmize) {
+                if (query.options!.optimize) {
                     await page.setRequestInterception(true);
 
                     const resourcesToBlock = [
@@ -709,9 +710,16 @@ class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventList
      * @returns {Promise<void>}
      */
     public close = async () => {
-        this._browser && this._browser.removeAllListeners() && await this._browser.close();
-        this._browser = undefined;
-        this._state = states.notInitialized;
+        try {
+            if (this._browser) {
+                this._browser.removeAllListeners() && await this._browser.close();
+                treeKill(this._browser.process().pid, "SIGKILL");
+            }
+        }
+        finally {
+            this._browser = undefined;
+            this._state = states.notInitialized;
+        }
     };
 }
 

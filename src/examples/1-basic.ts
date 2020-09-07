@@ -43,7 +43,7 @@ import {
             locations: ["London"], // This will override the global options
         }
     }, {
-        optmize: true,
+        optimize: true,
         locations: ["New York"],
         limit: 33,
     });

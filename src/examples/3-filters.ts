@@ -33,7 +33,7 @@ import {
             }
         }
     }, {
-        optmize: true,
+        optimize: true,
         locations: ["United States"],
         limit: 10,
     });

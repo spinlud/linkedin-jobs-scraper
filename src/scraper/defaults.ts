@@ -4,19 +4,20 @@ import { IQueryOptions } from "./query";
 const browserDefaults: LaunchOptions = {
     headless: true,
     args: [
-        // `--window-size=${1920},${1080}`,
+        "--enable-automation",
+        "--start-maximized",
+        "--window-size=1472,828",
         // "--single-process",
         "--lang=en-GB",
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-gpu",
         "--disable-dev-shm-usage",
-        "--enable-automation",
-        "--lang=en-GB",
         "--no-sandbox",
         "--disable-setuid-sandbox",
-        "--proxy-bypass-list=*",
         "--disable-dev-shm-usage",
+        "--proxy-server='direct://",
+        "--proxy-bypass-list=*",
         "--disable-accelerated-2d-canvas",
         "--disable-gpu",
         "--allow-running-insecure-content",
@@ -27,11 +28,11 @@ const browserDefaults: LaunchOptions = {
     ],
     defaultViewport: null,
     pipe: true,
-    slowMo: 10,
+    slowMo: 80,
 };
 
 const queryOptionsDefault: IQueryOptions = {
-    locations: ["Worldwide"],
+    locations: [],
     limit: 25,
     optimize: true,
 };

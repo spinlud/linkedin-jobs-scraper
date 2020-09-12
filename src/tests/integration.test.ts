@@ -11,7 +11,10 @@ describe('[TEST]', () => {
     it('Should run and terminate graciously', async () => {
         const scraper = new LinkedinScraper({
             headless: true,
-            slowMo: 12,
+            args: [
+                "--remote-debugging-address=0.0.0.0",
+                "--remote-debugging-port=9222",
+            ],
         });
 
         scraper.on(events.scraper.data, (data) => {

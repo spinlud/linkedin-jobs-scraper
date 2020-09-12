@@ -1,5 +1,6 @@
 import { EventEmitter } from "events";
 import TypedEmitter from "typed-emitter";
+import deepmerge from "deepmerge";
 import puppeteer from "puppeteer-extra";
 import { Browser, BrowserContext, Page, LaunchOptions } from "puppeteer";
 import { events, IEventListeners } from "./events";
@@ -182,10 +183,9 @@ class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventList
 
         this._browser && this._browser.removeAllListeners();
 
-        this._browser = await puppeteer.launch({
-            ...browserDefaults,
-            ...this.options,
-        });
+        const launchOptions = deepmerge.all([browserDefaults, this.options]);
+        logger.info('Setting chrome launch options', launchOptions);
+        this._browser = await puppeteer.launch(launchOptions);
 
         this._context = await this._browser.createIncognitoBrowserContext();
 
@@ -379,17 +379,22 @@ class LinkedinScraper extends (EventEmitter as new () => TypedEmitter<IEventList
         // Queries loop
         for (const query of queries) {
             // Merge options
-            query.options = {
-                ...queryOptionsDefault,
-                ...options,
-                ...query.options
-            };
+            const optionsToMege = [queryOptionsDefault];
+            options && optionsToMege.push(options);
+            query.options && optionsToMege.push(query.options);
+            query.options = deepmerge.all(optionsToMege);
+
+            // Add default location if none provided
+            if (!query?.options?.locations?.length) {
+                query.options.locations = ["Worldwide"];
+            }
 
             // Locations loop
             for (const location of query.options!.locations!) {
                 let jobsProcessed = 0;
                 tag = `[${query.query}][${location}]`;
                 logger.info(tag, `Starting new query:`, `query="${query.query}"`, `location="${location}"`);
+                logger.info(tag, `Query options`, query.options);
 
                 // Open new page in incognito context
                 const page = await this._context!.newPage();

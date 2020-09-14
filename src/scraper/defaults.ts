@@ -28,7 +28,7 @@ const browserDefaults: LaunchOptions = {
     ],
     defaultViewport: null,
     pipe: true,
-    slowMo: 80,
+    slowMo: 100,
 };
 
 const queryOptionsDefault: IQueryOptions = {

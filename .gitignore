@@ -3,6 +3,7 @@
 **/output
 **/tmp
 **/build
+**/*.tgz
 
 # General
 .DS_Store

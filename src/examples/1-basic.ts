@@ -29,7 +29,8 @@ import {
     });
 
     scraper.on(events.scraper.error, (err) => { console.error(err); });
-    scraper.on(events.scraper.end, () => { console.log('\nE N D (ツ)_.\\m/') });
+    scraper.on(events.scraper.invalidSession, () => { /* Do something */ });
+    scraper.on(events.scraper.end, () => { console.log("E N D (ツ)_.\\m/") });
 
     // Add listeners for puppeteer specific browser events
     scraper.on(events.puppeteer.browser.targetcreated, () => { });

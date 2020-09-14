@@ -1,7 +1,6 @@
 # linkedin-jobs-scraper
-> Scrape public available job offers on Linkedin using headless browser (account credentials are not required).
-> It is possible to run different queries on different locations concurrently. 
-> For each job the following data fields are extracted: `title`, `company`, `place`, `date`, `link`, `applyLink`,
+> Scrape public available job offers on Linkedin using headless browser. 
+> For each job, the following fields are extracted: `title`, `[company]`, `place`, `date`, `link`, `[applyLink]`,
 > `description`, `descriptionHTML`, `senorityLevel`, `jobFunction`, `employmentType`, `industries`.
 
 ## Table of Contents
@@ -11,6 +10,8 @@
 * [Installation](#installation)
 * [Usage](#usage)
 * [LinkedinScraper](#linkedinscraper)
+* [Anonymous vs authenticated session](#anonymous-vs-authenticated-session)
+* [Rate limiting](#rate-limiting)
 * [Filters](#filters)
 * [Company filter](#company-filter)
 * [Logger](#logger)
@@ -42,7 +43,10 @@ const {
     // Concurrent queries will run on different pages within the same browser instance.
     const scraper = new LinkedinScraper({
         headless: true,
-        slowMo: 10,
+        slowMo: 50,
+        args: [
+            "--lang=en-GB",
+        ],
     });
 
     // Add listeners for scraper events
@@ -53,7 +57,7 @@ const {
             `Query='${data.query}'`,
             `Location='${data.location}'`,
             `Title='${data.title}'`,
-            `Company='${data.company}'`,
+            `Company='${data.company ? data.company : "N/A"}'`,
             `Place='${data.place}'`,
             `Date='${data.date}'`,
             `Link='${data.link}'`,
@@ -68,6 +72,7 @@ const {
     scraper.on(events.scraper.error, (err) => {
         console.error(err);
     });
+
     scraper.on(events.scraper.end, () => {
         console.log('All done!');
     });
@@ -106,7 +111,7 @@ const {
         scraper.run([
             {
                 query: "Engineer",
-                locations: ["Germany"], // This will override global option locations ([New York])                
+                locations: ["Germany"], // This will be merged with the global options => ["New York", "Germany"]                
             },
             {
                 query: "Sales",
@@ -199,12 +204,73 @@ disableLogger() { }
 enableLoggerInfo() { }
 
 /**
+ * Enable logger warn namespace
+ * @returns void
+ * @static
+ */
+enableLoggerWarn() { }
+
+
+/**
  * Enable logger error namespace
  * @returns void
  * @static
  */
 enableLoggerError() { } 
 ```
+
+## Anonymous vs authenticated session
+By default the scraper will run in anonymous mode (no authentication required). In some environments (e.g. AWS or Heroku) 
+this may be not possible though. You may face the following error message:
+
+```shell script
+scraper:error [][] Scraper failed to run in anonymous mode, authentication may be necessary for this environment. Please check the documentation on how to use an authenticated session.
+```
+
+In that case the only option available is to run using an authenticated session. These are the steps required:
+1. Login to LinkedIn using an account of your choice.
+2. Open Chrome developer tools:
+
+![](images/img3.png)
+
+3. Go to tab `Application`, then from left panel select `Storage` -> `Cookies` -> `https://www.linkedin.com`. In the
+main view locate row with name `li_at` and copy content from the column `Value`.
+
+![](images/img4.png)
+
+4. Set the environment variable `LI_AT_COOKIE` with the value obtained in step 3, then run your application as normal.
+Example:
+
+```shell script
+LI_AT_COOKIE=<your li_at cookie value here> node app.js
+```
+
+## Rate limiting
+You may experience the following rate limiting warning during execution: `429 too many requests`. This means you are 
+exceeding the number of requests per second allowed by the server (this is especially true when using authenticated sessions
+where the rate limits are much more strict). You can overcome this by:
+
+- trying a higher `slowMo` value for the scraper options (this will slow down the browser); as a rule of thumb you can 
+add 100 ms for each concurrent query (e.g. 100 for 1 query, 200 for 2 concurrent queries, 300 for 3 concurrent queries and so on);
+- reducing the number of concurrent queries (make them to run in serial instead).
+
+Example:
+
+```js
+const scraper = new LinkedinScraper({
+    headless: true,
+    slowMo: 200,
+    args: [
+        "--lang=en-GB",
+    ],
+});
+
+// Two concurrent queries
+await Promise.all([
+    scraper.run([...]),
+    scraper.run([...]),
+]);
+```  
 
 ## Filters
 It is possible to customize queries with the following filters:
@@ -269,9 +335,13 @@ It is also possible to filter by company using the public company jobs url on Li
  1. Login to LinkedIn using an account of your choice.
  2. Go to the LinkedIn page of the company you are interested in (e.g. [https://www.linkedin.com/company/google](https://www.linkedin.com/company/google)).
  3. Click on `jobs` from the left menu.
+ 
  ![](images/img1.png)
+ 
  4. Scroll down and locate `See all jobs` or `See jobs` button.
+ 
  ![](images/img2.png)
+ 
  5. Right click and copy link address (or navigate the link and copy it from the address bar).
  6. Paste the link address in code as follows:
  
@@ -294,6 +364,7 @@ await scraper.run({
 ## Logger
 Logger uses [debug](https://github.com/visionmedia/debug) package under the hood. The following namespace are used:
 * `scraper:info`
+* `scraper:warn`
 * `scraper:error`
 
 Use environment variable `DEBUG` or the programmatic API to selectively enable/disable one or more namespace.

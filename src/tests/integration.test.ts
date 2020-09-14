@@ -2,7 +2,8 @@ import {
     LinkedinScraper,
     ETimeFilterOptions,
     ERelevanceFilterOptions,
-    events
+    EExperienceLevelOptions,
+    events,
 } from "..";
 
 describe('[TEST]', () => {
@@ -15,6 +16,7 @@ describe('[TEST]', () => {
                 "--remote-debugging-address=0.0.0.0",
                 "--remote-debugging-port=9222",
             ],
+            slowMo: 300,
         });
 
         scraper.on(events.scraper.data, (data) => {
@@ -34,9 +36,7 @@ describe('[TEST]', () => {
 
             expect(data.location.length).toBeGreaterThan(0);
             expect(data.title.length).toBeGreaterThan(0);
-            expect(data.company.length).toBeGreaterThan(0);
             expect(data.place.length).toBeGreaterThan(0);
-            expect(data.link.length).toBeGreaterThan(0);
             expect(data.description.length).toBeGreaterThan(0);
             expect(data.descriptionHTML.length).toBeGreaterThan(0);
 
@@ -48,9 +48,10 @@ describe('[TEST]', () => {
         });
 
         scraper.on(events.scraper.error, (err) => { console.error(err); });
-        scraper.on(events.scraper.end, () => { console.log('\nE N D (ツ)_.\\m/') });
+        scraper.on(events.scraper.invalidSession, () => { console.error("Invalid session!"); });
+        scraper.on(events.scraper.end, () => { console.log("\nE N D (ツ)_.\\m/") });
 
-        const descriptionFn = () => (<HTMLElement>document.querySelector(".description__text")!)
+        const descriptionFn = () => (<HTMLElement>document.querySelector(".jobs-description")!)
             .innerText
             .replace(/[\s\n\r]+/g, " ")
             .trim();
@@ -61,7 +62,7 @@ describe('[TEST]', () => {
                         query: "",
                         options: {
                             optimize: false,
-                            limit: 53,
+                            limit: 27,
                             descriptionFn: descriptionFn
                         },
                     },
@@ -81,22 +82,22 @@ describe('[TEST]', () => {
 
             scraper.run(
                 {
-                    query: 'Software Engineer',
+                    query: 'Engineer',
                     options: {
                         filters: {
-                            companyJobsUrl: "https://www.linkedin.com/jobs/search/?f_C=1441%2C17876832%2C791962%2C2374003%2C18950635%2C16140%2C10440912&geoId=92000000&lipi=urn%3Ali%3Apage%3Acompanies_company_jobs_jobs%3BeNiQUtwuSk6JsASF9SoGAw%3D%3D&licu=urn%3Ali%3Acontrol%3Ad_flagship3_company-see_all_jobs",
+                            companyJobsUrl: "https://www.linkedin.com/jobs/search/?f_C=1441%2C10667&geoId=101165590&keywords=engineer&location=United%20Kingdom",
                         },
-                        descriptionFn: descriptionFn
                     },
                 },
                 {
-                    limit: 33,
+                    limit: 27,
                     locations: ["United States", "United Kingdom"],
                     filters: {
                         relevance: ERelevanceFilterOptions.RECENT,
-                    }
+                    },
+                    optimize: false,
                 }
-            )
+            ),
         ]);
 
         await scraper.close();

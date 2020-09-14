@@ -21,6 +21,7 @@ interface IEvents {
     scraper: {
         data: "scraper:data";
         error: "scraper:error";
+        invalidSession: "scraper:invalid-session",
         end: "scraper:end";
     },
     puppeteer: {
@@ -37,6 +38,7 @@ const events: IEvents = {
     scraper: {
         data: "scraper:data",
         error: "scraper:error",
+        invalidSession: "scraper:invalid-session",
         end: "scraper:end",
     },
     puppeteer: {
@@ -52,6 +54,7 @@ const events: IEvents = {
 export interface IEventListeners {
     ["scraper:data"]: (data: IData) => void;
     ["scraper:error"]: (error: Error | string) => void;
+    ["scraper:invalid-session"]: () => void;
     ["scraper:end"]: () => void;
     ["disconnected"]: (...args: any[]) => void;
     ["targetchanged"]: (...args: any[]) => void;

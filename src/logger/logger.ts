@@ -2,9 +2,16 @@ import debug from "debug";
 
 const namespace = "scraper";
 
+const namespaces = {
+    INFO: `${namespace}:info`,
+    WARN: `${namespace}:warn`,
+    ERROR: `${namespace}:error`,
+};
+
 const logger = {
-    info: debug(`${namespace}:info`),
-    error: debug(`${namespace}:error`),
+    info: debug(namespaces.INFO),
+    warn: debug(namespaces.WARN),
+    error: debug(namespaces.ERROR),
     enable: () => {
         debug.enable(`${namespace}:*`);
     },
@@ -12,10 +19,13 @@ const logger = {
         debug.disable();
     },
     enableInfo: () => {
-        debug.enable(`${namespace}:info`);
+        debug.enable(namespaces.INFO);
+    },
+    enableWarn: () => {
+        debug.enable(namespaces.WARN);
     },
     enableError: () => {
-        debug.enable(`${namespace}:error`);
+        debug.enable(namespaces.ERROR);
     },
 };
 

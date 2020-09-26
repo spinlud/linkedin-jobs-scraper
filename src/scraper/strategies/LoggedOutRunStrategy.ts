@@ -5,7 +5,7 @@ import { sleep } from "../../utils/utils";
 import { IQuery } from "../query";
 import { logger } from "../../logger/logger";
 
-const selectors = {
+export const selectors = {
     container: ".results__container.results__container--two-pane",
     links: ".jobs-search__results-list li a.result-card__full-card-link",
     applyLink: "a[data-is-offsite-apply=true]",
@@ -226,6 +226,13 @@ export class LoggedOutRunStrategy extends RunStrategy {
 
                 try {
                     // Extract job main fields
+                    logger.debug(tag, `Evaluating selectors`, [
+                        selectors.links,
+                        selectors.companies,
+                        selectors.places,
+                        selectors.dates,
+                    ]);
+
                     [jobTitle, jobCompany, jobPlace, jobDate] = await page.evaluate(
                         (
                             linksSelector: string,
@@ -250,6 +257,10 @@ export class LoggedOutRunStrategy extends RunStrategy {
                     );
 
                     // Load job details and extract job link
+                    logger.debug(tag, `Evaluating selectors`, [
+                        selectors.links,
+                    ]);
+
                     [jobLink, loadJobDetailsResult] = await Promise.all([
                         page.evaluate((linksSelector: string, jobIndex: number) => {
                                 const linkElem = <HTMLElement>document.querySelectorAll(linksSelector)[jobIndex];
@@ -273,6 +284,10 @@ export class LoggedOutRunStrategy extends RunStrategy {
                     }
 
                     // Use custom description function if available
+                    logger.debug(tag, `Evaluating selectors`, [
+                        selectors.description
+                    ]);
+
                     if (query.options?.descriptionFn) {
                         [jobDescription, jobDescriptionHTML] = await Promise.all([
                             page.evaluate(`(${query.options.descriptionFn.toString()})();`),
@@ -291,12 +306,20 @@ export class LoggedOutRunStrategy extends RunStrategy {
                     }
 
                     // Extract apply link
+                    logger.debug(tag, `Evaluating selectors`, [
+                        selectors.applyLink
+                    ]);
+
                     jobApplyLink = await page.evaluate((selector) => {
                         const applyBtn = document.querySelector<HTMLElement>(selector);
                         return applyBtn ? applyBtn.getAttribute("href") : null;
                     }, selectors.applyLink);
 
                     // Extract other job fields
+                    logger.debug(tag, `Evaluating selectors`, [
+                        selectors.criteria
+                    ]);
+
                     [
                         jobSenorityLevel,
                         jobFunction,

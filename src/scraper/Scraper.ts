@@ -1,14 +1,18 @@
 import { EventEmitter } from "events";
 import TypedEmitter from "typed-emitter";
 import { IEventListeners } from "./events";
-import {LaunchOptions, Page} from "puppeteer";
-import {IQuery, IQueryOptions} from "./query";
+import { LaunchOptions } from "puppeteer";
+import { IQuery, IQueryOptions } from "./query";
 import { logger } from "../logger/logger";
 
 export abstract class Scraper extends (EventEmitter as new () => TypedEmitter<IEventListeners>) {
     public options: LaunchOptions;
 
-    constructor(options: LaunchOptions) {
+    /**
+     * @constructor
+     * @param {LaunchOptions} options
+     */
+    protected constructor(options: LaunchOptions) {
         super();
         this.options = options;
     }
@@ -26,6 +30,13 @@ export abstract class Scraper extends (EventEmitter as new () => TypedEmitter<IE
      * @static
      */
     public static disableLogger = () => logger.disable();
+
+    /**
+     * Enable logger debug namespace
+     * @returns void
+     * @static
+     */
+    public static enableLoggerDebug = () => logger.enableDebug();
 
     /**
      * Enable logger info namespace

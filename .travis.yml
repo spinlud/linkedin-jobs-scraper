@@ -18,7 +18,7 @@ jobs:
 
     - stage: test
       env: DEBUG=scraper:*
-      script: npm run test
+      script: npm run test-logged-in
 
     - stage: deploy
       script: npm run build

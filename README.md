@@ -197,6 +197,14 @@ enableLogger() { }
 disableLogger() { }
 
 /**
+ * Enable logger debug namespace
+ * @returns void
+ * @static
+ */
+enableLoggerDebug() { }
+
+
+/**
  * Enable logger info namespace
  * @returns void
  * @static
@@ -363,11 +371,17 @@ await scraper.run({
   
 ## Logger
 Logger uses [debug](https://github.com/visionmedia/debug) package under the hood. The following namespace are used:
+* `scraper:debug`
 * `scraper:info`
 * `scraper:warn`
 * `scraper:error`
 
 Use environment variable `DEBUG` or the programmatic API to selectively enable/disable one or more namespace.
+Example:
+
+```sh
+DEBUG=scraper:info node app.js
+```
 
 ## License
 [MIT License](http://en.wikipedia.org/wiki/MIT_License)

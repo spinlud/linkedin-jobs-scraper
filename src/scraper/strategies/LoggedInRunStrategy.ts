@@ -5,7 +5,7 @@ import { sleep } from "../../utils/utils";
 import { IQuery } from "../query";
 import { logger } from "../../logger/logger";
 
-const selectors = {
+export const selectors = {
     container: '.jobs-search-two-pane__container',
     toggleChatBtn: '.msg-overlay-bubble-header__controls button:nth-of-type(2)',
     links: 'a.job-card-container__link.job-card-list__title',
@@ -254,6 +254,13 @@ export class LoggedInRunStrategy extends RunStrategy {
 
                 try {
                     // Extract job main fields
+                    logger.debug(tag, 'Evaluating selectors', [
+                        selectors.links,
+                        selectors.companies,
+                        selectors.places,
+                        selectors.dates,
+                    ]);
+
                     [jobTitle, jobCompany, jobPlace, jobDate] = await page.evaluate(
                         (
                             linksSelector: string,
@@ -278,6 +285,10 @@ export class LoggedInRunStrategy extends RunStrategy {
                     );
 
                     // Try to load job details and extract job link
+                    logger.debug(tag, 'Evaluating selectors', [
+                        selectors.links,
+                    ]);
+
                     [jobLink, loadDetailsResult] = await Promise.all([
                         page.evaluate((linksSelector: string, jobIndex: number) => {
                                 const linkElem = <HTMLElement>document.querySelectorAll(linksSelector)[jobIndex];
@@ -301,6 +312,10 @@ export class LoggedInRunStrategy extends RunStrategy {
                     }
 
                     // Use custom description function if available
+                    logger.debug(tag, 'Evaluating selectors', [
+                        selectors.description,
+                    ]);
+
                     if (query.options?.descriptionFn) {
                         [jobDescription, jobDescriptionHTML] = await Promise.all([
                             page.evaluate(`(${query.options.descriptionFn.toString()})();`),
@@ -321,6 +336,10 @@ export class LoggedInRunStrategy extends RunStrategy {
                     jobDescription = jobDescription as string;
 
                     // Extract job criteria
+                    logger.debug(tag, 'Evaluating selectors', [
+                        selectors.criteria,
+                    ]);
+
                     [
                         jobSenorityLevel,
                         jobEmploymentType,

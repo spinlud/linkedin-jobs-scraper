@@ -245,7 +245,13 @@ class LinkedinScraper extends Scraper {
                 const searchUrl = this._buildSearchUrl(query.query || "", location, query.options!);
 
                 // Run strategy
-                await this._runStrategy.run(page, searchUrl, query, location);
+                const runStrategyResult = await this._runStrategy.run(page, searchUrl, query, location);
+
+                // Check if forced exit is required
+                if (runStrategyResult.exit) {
+                    logger.warn(tag, "Forced termination");
+                    return;
+                }
 
                 // Close page
                 page && await page.close();

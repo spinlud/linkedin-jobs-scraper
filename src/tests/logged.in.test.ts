@@ -1,4 +1,3 @@
-import { exec } from "child_process";
 import { IData } from "../scraper/events";
 import { IQuery, IQueryOptions } from "../scraper/query";
 import { killChromium } from "../utils/browser";

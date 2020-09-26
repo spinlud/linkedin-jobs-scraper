@@ -1,4 +1,4 @@
-import { RunStrategy, ILoadResult } from "./RunStrategy";
+import { RunStrategy, IRunStrategyResult, ILoadResult } from "./RunStrategy";
 import { Page } from "puppeteer";
 import { events } from "../events";
 import { sleep } from "../../utils/utils";
@@ -166,7 +166,7 @@ export class LoggedInRunStrategy extends RunStrategy {
         url: string,
         query: IQuery,
         location: string,
-    ): Promise<void> => {
+    ): Promise<IRunStrategyResult> => {
         let tag = `[${query.query}][${location}]`;
         let processed = 0;
         let paginationIndex = 1;
@@ -189,7 +189,7 @@ export class LoggedInRunStrategy extends RunStrategy {
         if (!(await LoggedInRunStrategy._isAuthenticatedSession(page))) {
             logger.error("The provided session cookie is invalid. Check the documentation on how to obtain a valid session cookie.");
             this.scraper.emit(events.scraper.invalidSession);
-            process.exit(1);
+            return { exit: true };
         }
 
         try {
@@ -197,7 +197,7 @@ export class LoggedInRunStrategy extends RunStrategy {
         }
         catch(err) {
             logger.info(tag, `No jobs found, skip`);
-            return;
+            return { exit: false };
         }
 
         // Try closing chat panel
@@ -448,5 +448,7 @@ export class LoggedInRunStrategy extends RunStrategy {
                 break;
             }
         }
+
+        return { exit: false };
     }
 }

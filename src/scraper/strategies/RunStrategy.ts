@@ -2,6 +2,10 @@ import { Page } from "puppeteer";
 import { Scraper } from "../Scraper";
 import { IQuery } from "../query";
 
+export interface IRunStrategyResult {
+    exit: boolean;
+}
+
 export abstract class RunStrategy {
     protected scraper: Scraper;
 
@@ -14,7 +18,7 @@ export abstract class RunStrategy {
         url: string,
         query: IQuery,
         location: string,
-    ): Promise<void>;
+    ): Promise<IRunStrategyResult>;
 }
 
 export interface ILoadResult {

@@ -1,4 +1,4 @@
-import { RunStrategy, ILoadResult } from "./RunStrategy";
+import { RunStrategy, IRunStrategyResult, ILoadResult } from "./RunStrategy";
 import { Page } from "puppeteer";
 import { events } from "../events";
 import { sleep } from "../../utils/utils";
@@ -164,7 +164,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
         url: string,
         query: IQuery,
         location: string,
-    ): Promise<void> => {
+    ): Promise<IRunStrategyResult> => {
         let tag = `[${query.query}][${location}]`;
         let processed = 0;
 
@@ -177,7 +177,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
         // Verify if authentication is required
         if ((await LoggedOutRunStrategy._needsAuthentication(page))) {
             logger.error(tag, "Scraper failed to run in anonymous mode, authentication may be necessary for this environment. Please check the documentation on how to use an authenticated session.")
-            process.exit(1);
+            return { exit: true };
         }
 
         // Wait for lazy loading jobs
@@ -186,7 +186,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
         }
         catch(err) {
             logger.info(tag, `No jobs found, skip`);
-            return;
+            return { exit: false };
         }
 
         // Pagination loop
@@ -408,5 +408,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
                 break;
             }
         }
+
+        return { exit: false };
     }
 }

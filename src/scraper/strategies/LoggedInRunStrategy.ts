@@ -7,11 +7,11 @@ import { logger } from "../../logger/logger";
 
 export const selectors = {
     container: '.jobs-search-two-pane__container',
-    toggleChatBtn: '.msg-overlay-bubble-header__controls button:nth-of-type(2)',
+    chatPanel: '.msg-overlay-list-bubble',
     links: 'a.job-card-container__link.job-card-list__title',
-    companies: 'div[data-test-job-card-list__company-name]',
-    places: 'li[data-test-job-card-list__location]',
-    dates: 'time[data-test-job-card-container__listed-time=true]',
+    companies: '.job-card-container .artdeco-entity-lockup__subtitle',
+    places: '.job-card-container .artdeco-entity-lockup__caption',
+    dates: '.job-card-container time',
     description: '.jobs-description',
     detailsTop: '.jobs-details-top-card',
     details: '.jobs-details__main-content',
@@ -200,13 +200,18 @@ export class LoggedInRunStrategy extends RunStrategy {
             return { exit: false };
         }
 
-        // Try closing chat panel
+        // Try to hide chat panel
         try {
-            await page.evaluate((selector) => document.querySelector(selector).click(),
-                selectors.toggleChatBtn);
+            await page.evaluate((selector) => {
+                    const div = document.querySelector(selector);
+                    if (div) {
+                        div.style.display = "none";
+                    }
+                },
+                selectors.chatPanel);
         }
         catch (err) {
-            logger.info(tag, "Failed to close chat panel");
+            logger.info(tag, "Failed to hide chat panel");
         }
 
         // Pagination loop
@@ -269,12 +274,24 @@ export class LoggedInRunStrategy extends RunStrategy {
                             datesSelector: string,
                             jobIndex: number
                         ) => {
-                            return [
-                                (<HTMLElement>document.querySelectorAll(linksSelector)[jobIndex]).innerText,
-                                (<HTMLElement>document.querySelectorAll(companiesSelector)[jobIndex]).innerText,
-                                (<HTMLElement>document.querySelectorAll(placesSelector)[jobIndex]).innerText,
+                            const title = document.querySelectorAll(linksSelector)[jobIndex] ?
+                                (<HTMLElement>document.querySelectorAll(linksSelector)[jobIndex]).innerText : "";
+
+                            const company = document.querySelectorAll(companiesSelector)[jobIndex] ?
+                                (<HTMLElement>document.querySelectorAll(companiesSelector)[jobIndex]).innerText : "";
+
+                            const place = document.querySelectorAll(placesSelector)[jobIndex] ?
+                                (<HTMLElement>document.querySelectorAll(placesSelector)[jobIndex]).innerText : "";
+
+                            const date = document.querySelectorAll(datesSelector)[jobIndex] ?
                                 (<HTMLElement>document.querySelectorAll(datesSelector)[jobIndex])
-                                    .getAttribute('datetime')
+                                    .getAttribute('datetime') : "";
+
+                            return [
+                                title,
+                                company,
+                                place,
+                                date,
                             ];
                         },
                         selectors.links,

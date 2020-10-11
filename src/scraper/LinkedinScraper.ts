@@ -257,7 +257,7 @@ class LinkedinScraper extends Scraper {
                         logger.warn(tag, "Error 429 too many requests. You would probably need to use a higher 'slowMo' value and/or reduce the number of concurrent queries.");
                     }
                     else if (response.status() >= 400) {
-                        logger.warn(tag, response.status(), `Error for request ${response.request()}`)
+                        logger.warn(tag, response.status(), `Error for request ${response.request().url()}`)
                     }
                 });
 

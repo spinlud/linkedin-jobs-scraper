@@ -52,7 +52,7 @@ describe('[TEST]', () => {
         {
             query: "",
             options: {
-                limit: 27,
+                limit: 10,
             },
         },
     ];
@@ -61,7 +61,7 @@ describe('[TEST]', () => {
         {
             query: 'Engineer',
             options: {
-                limit: 10,
+                limit: 5,
                 filters: {
                     companyJobsUrl: "https://www.linkedin.com/jobs/search/?f_C=1441%2C10667&geoId=101165590&keywords=engineer&location=United%20Kingdom",
                 },
@@ -70,7 +70,7 @@ describe('[TEST]', () => {
         {
             query: "Designer",
             options: {
-                limit: 9,
+                limit: 5,
                 optimize: true,
             },
         },
@@ -103,10 +103,8 @@ describe('[TEST]', () => {
         scraper.on(events.scraper.end, onEndFn);
 
         try {
-            await Promise.all([
-                scraper.run(queriesSerial1, globalOptions),
-                scraper.run(queriesSerial2, globalOptions),
-            ]);
+            await scraper.run(queriesSerial1, globalOptions);
+            await scraper.run(queriesSerial2, globalOptions);
         }
         finally {
             await scraper.close();

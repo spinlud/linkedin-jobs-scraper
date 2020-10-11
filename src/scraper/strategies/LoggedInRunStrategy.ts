@@ -1,3 +1,4 @@
+import { config } from "../../config";
 import { RunStrategy, IRunStrategyResult, ILoadResult } from "./RunStrategy";
 import { Page } from "puppeteer";
 import { events } from "../events";
@@ -175,7 +176,7 @@ export class LoggedInRunStrategy extends RunStrategy {
         logger.info("Setting authentication cookie");
         await page.setCookie({
             name: "li_at",
-            value: process.env.LI_AT_COOKIE!,
+            value: config.LI_AT_COOKIE!,
             domain: ".www.linkedin.com"
         });
 

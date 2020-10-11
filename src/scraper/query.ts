@@ -1,10 +1,5 @@
-import {
-    ERelevanceFilterOptions,
-    ETimeFilterOptions,
-    EJobTypeFilterOptions,
-    EExperienceLevelOptions,
-} from "./filters";
-import {getQueryParams} from "../utils/url";
+import { getQueryParams } from "../utils/url";
+import { relevanceFilter, timeFilter, typeFilter, experienceLevelFilter } from "./filters";
 
 export interface IQuery {
     query?: string;
@@ -16,10 +11,10 @@ export interface IQueryOptions {
     limit?: number;
     filters?: {
         companyJobsUrl?: string;
-        relevance?: ERelevanceFilterOptions;
-        time?: ETimeFilterOptions;
-        type?: EJobTypeFilterOptions;
-        experience?: EExperienceLevelOptions;
+        relevance?: string;
+        time?: string;
+        type?: string | string[];
+        experience?: string | string[];
     },
     descriptionFn?: () => string;
     optimize?: boolean;
@@ -92,7 +87,7 @@ export const validateQuery = (query: IQuery): IQueryValidationError[] => {
 
                 try {
                     const baseUrl = "https://www.linkedin.com/jobs/search/?";
-                    new URL(filters.companyJobsUrl); // CHeck url validity
+                    new URL(filters.companyJobsUrl); // Check url validity
                     const queryParams = getQueryParams(filters.companyJobsUrl);
 
                     if (!filters.companyJobsUrl.toLowerCase().startsWith(baseUrl)
@@ -108,6 +103,62 @@ export const validateQuery = (query: IQuery): IQueryValidationError[] => {
                         param: "options.filters.companyJobsUrl",
                         reason: `Must be a valid url`
                     });
+                }
+            }
+
+            if (filters.relevance) {
+                const allowed = Object.values(relevanceFilter);
+
+                if (!allowed.includes(filters.relevance)) {
+                    errors.push({
+                        param: "options.filters.relevance",
+                        reason: `Must be one of ${allowed.join(", ")}`
+                    });
+                }
+            }
+
+            if (filters.time) {
+                const allowed = Object.values(timeFilter);
+
+                if (!allowed.includes(filters.time)) {
+                    errors.push({
+                        param: "options.filters.time",
+                        reason: `Must be one of ${allowed.join(", ")}`
+                    });
+                }
+            }
+
+            if (filters.type) {
+                const allowed = Object.values(typeFilter);
+
+                if (!Array.isArray(filters.type)) {
+                    filters.type = [filters.type];
+                }
+
+                for (const t of filters.type) {
+                    if (!allowed.includes(t)) {
+                        errors.push({
+                            param: "options.filters.type",
+                            reason: `Must be one of ${allowed.join(", ")}`
+                        });
+                    }
+                }
+            }
+
+            if (filters.experience) {
+                const allowed = Object.values(experienceLevelFilter);
+
+                if (!Array.isArray(filters.experience)) {
+                    filters.experience = [filters.experience];
+                }
+
+                for (const t of filters.experience) {
+                    if (!allowed.includes(t)) {
+                        errors.push({
+                            param: "options.filters.experience",
+                            reason: `Must be one of ${allowed.join(", ")}`
+                        });
+                    }
                 }
             }
         }

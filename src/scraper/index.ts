@@ -1,10 +1,10 @@
 export { LinkedinScraper } from "./LinkedinScraper";
 
 export {
-    ERelevanceFilterOptions,
-    ETimeFilterOptions,
-    EJobTypeFilterOptions,
-    EExperienceLevelOptions,
+    relevanceFilter,
+    timeFilter,
+    typeFilter,
+    experienceLevelFilter,
 } from "./filters";
 
 export { events } from "./events";

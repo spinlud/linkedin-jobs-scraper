@@ -1,7 +1,8 @@
 # linkedin-jobs-scraper
-> Scrape public available job offers on Linkedin using headless browser. 
+> Scrape public available jobs on Linkedin using headless browser. 
 > For each job, the following fields are extracted: `title`, `[company]`, `place`, `date`, `link`, `[applyLink]`,
-> `description`, `descriptionHTML`, `senorityLevel`, `jobFunction`, `employmentType`, `industries`.
+> `description`, `descriptionHTML`, `senorityLevel`, `jobFunction`, `employmentType`, `industries`. <br><br>
+> It's also available an equivalent [package in python](https://github.com/spinlud/py-linkedin-jobs-scraper).
 
 ## Table of Contents
 
@@ -31,10 +32,10 @@ npm install --save linkedin-jobs-scraper
 ```js
 const { 
     LinkedinScraper,
-    ERelevanceFilterOptions,
-    ETimeFilterOptions,
-    EJobTypeFilterOptions,
-    EExperienceLevelOptions,
+    relevanceFilter,
+    timeFilter,
+    typeFilter,
+    experienceLevelFilter,
     events,
 } = require("linkedin-jobs-scraper");
 
@@ -101,8 +102,8 @@ const {
                 locations: ["London"],
                 descriptionFn: descriptionFn,
                 filters: {                    
-                    relevance: ERelevanceFilterOptions.RELEVANT,
-                    time: ETimeFilterOptions.MONTH,                    
+                    relevance: relevanceFilter.RELEVANT,
+                    time: timeFilter.MONTH,                                      
                 }
             }
         }),
@@ -111,7 +112,12 @@ const {
         scraper.run([
             {
                 query: "Engineer",
-                locations: ["Germany"], // This will be merged with the global options => ["New York", "Germany"]                
+                options: {
+                    locations: ["United States"], // This will be merged with the global options => ["United States", "Europe"]
+                    filters: {
+                        type: [typeFilter.FULL_TIME, typeFilter.CONTRACT]    
+                    },       
+                }                                                       
             },
             {
                 query: "Sales",
@@ -120,7 +126,7 @@ const {
                 }
             },
         ], { // Global options for this run, will be merged individually with each query options (if any)
-            locations: ["New York"],
+            locations: ["Europe"],
             optimize: true,
             limit: 33,
         }),
@@ -290,7 +296,7 @@ It is possible to customize queries with the following filters:
     * `WEEK`
     * `MONTH`
     * `ANY`
-- JOB TYPE:
+- TYPE:
     * `FULL_TIME`
     * `PART_TIME`
     * `TEMPORARY`
@@ -307,10 +313,10 @@ See the following example for more details:
 ```js
 const { 
     LinkedinScraper,
-    ERelevanceFilterOptions,
-    ETimeFilterOptions,
-    EJobTypeFilterOptions,
-    EExperienceLevelOptions,
+    relevanceFilter,
+    timeFilter,
+    typeFilter,
+    experienceLevelFilter,
     events,
 } = require("linkedin-jobs-scraper");
 
@@ -321,10 +327,10 @@ const {
             query: "",
             options: {
                 filters: {                    
-                    relevance: ERelevanceFilterOptions.RELEVANT,
-                    time: ETimeFilterOptions.MONTH,
-                    type: EJobTypeFilterOptions.FULL_TIME,
-                    experience: EExperienceLevelOptions.MID_SENIOR,
+                    relevance: relevanceFilter.RELEVANT,
+                    time: timeFilter.MONTH,
+                    type: [typeFilter.FULL_TIME, typeFilter.CONTRACT], // string or array
+                    experience: [experienceLevelFilter.ENTRY_LEVEL, experienceLevelFilter.MID_SENIOR], // string or array
                 }
             }
         }, {

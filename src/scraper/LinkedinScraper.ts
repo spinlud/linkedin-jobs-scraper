@@ -2,7 +2,8 @@ import { EventEmitter } from "events";
 import TypedEmitter from "typed-emitter";
 import deepmerge from "deepmerge";
 import puppeteer from "puppeteer-extra";
-import { Browser, BrowserContext, Page, LaunchOptions } from "puppeteer";
+import { config } from "../config";
+import {Browser, BrowserContext, Page, LaunchOptions, Request} from "puppeteer";
 import { events, IEventListeners } from "./events";
 import { states } from "./states";
 import { browserDefaults, queryOptionsDefault } from "./defaults";
@@ -36,7 +37,7 @@ class LinkedinScraper extends Scraper {
     constructor(options: LaunchOptions) {
         super(options);
 
-        if (process.env.LI_AT_COOKIE) {
+        if (config.LI_AT_COOKIE) {
             this._runStrategy = new LoggedInRunStrategy(this);
             logger.info("Env variable LI_AT_COOKIE detected. Implementing LoggedInRunStrategy.")
         }
@@ -112,15 +113,24 @@ class LinkedinScraper extends Scraper {
             }
 
             if (options.filters.time && options.filters.time.length) {
-                url.searchParams.append("f_TP", options.filters.time);
+                const key = config.LI_AT_COOKIE ? "f_TPR" : "f_TP";
+                url.searchParams.append(key, options.filters.time);
             }
 
             if (options.filters.type) {
-                url.searchParams.append("f_JT", options.filters.type);
+                if (!Array.isArray(options.filters.type)) {
+                    options.filters.type = [options.filters.type]
+                }
+
+                url.searchParams.append("f_JT", options.filters.type.join(","));
             }
 
             if (options.filters.experience) {
-                url.searchParams.append("f_E", options.filters.experience);
+                if (!Array.isArray(options.filters.experience)) {
+                    options.filters.experience = [options.filters.experience]
+                }
+
+                url.searchParams.append("f_E", options.filters.experience.join(","));
             }
         }
 
@@ -148,8 +158,18 @@ class LinkedinScraper extends Scraper {
             queries = [queries];
         }
 
-        // Validation
+        // Merge options and validate
         for (const query of queries) {
+            const optionsToMerge = [queryOptionsDefault];
+            options && optionsToMerge.push(options);
+            query.options && optionsToMerge.push(query.options);
+            query.options = deepmerge.all(optionsToMerge);
+
+            // Add default location if none provided
+            if (!query?.options?.locations?.length) {
+                query.options.locations = ["Worldwide"];
+            }
+
             const errors = validateQuery(query);
 
             if (errors.length) {
@@ -165,17 +185,6 @@ class LinkedinScraper extends Scraper {
 
         // Queries loop
         for (const query of queries) {
-            // Merge options
-            const optionsToMerge = [queryOptionsDefault];
-            options && optionsToMerge.push(options);
-            query.options && optionsToMerge.push(query.options);
-            query.options = deepmerge.all(optionsToMerge);
-
-            // Add default location if none provided
-            if (!query?.options?.locations?.length) {
-                query.options.locations = ["Worldwide"];
-            }
-
             // Locations loop
             for (const location of query.options!.locations!) {
                 // let processed = 0;
@@ -198,23 +207,32 @@ class LinkedinScraper extends Scraper {
                 // Set a random user agent
                 await page.setUserAgent(getRandomUserAgent());
 
-                // Enable optimization if required
-                if (query.options!.optimize) {
-                    await page.setRequestInterception(true);
+                // Enable request interception
+                await page.setRequestInterception(true);
 
-                    const resourcesToBlock = [
-                        "image",
-                        "stylesheet",
-                        "media",
-                        "font",
-                        "texttrack",
-                        "object",
-                        "beacon",
-                        "csp_report",
-                        "imageset",
-                    ];
+                const onRequest = (request: Request) => {
+                    const url = new URL(request.url());
+                    const domain = url.hostname.split(".").slice(-2).join(".").toLowerCase();
 
-                    page.on("request", request => {
+                    // Block tracking and 3rd party requests
+                    if (url.pathname.includes("li/track") || !["linkedin.com", "licdn.com"].includes(domain)) {
+                        return request.abort();
+                    }
+
+                    // It optimization is enabled, block other resource types
+                    if (query.options!.optimize) {
+                        const resourcesToBlock = [
+                            "image",
+                            "stylesheet",
+                            "media",
+                            "font",
+                            "texttrack",
+                            "object",
+                            "beacon",
+                            "csp_report",
+                            "imageset",
+                        ];
+
                         if (
                             resourcesToBlock.some(r => request.resourceType() === r)
                             || request.url().includes(".jpg")
@@ -223,21 +241,23 @@ class LinkedinScraper extends Scraper {
                             || request.url().includes(".gif")
                             || request.url().includes(".css")
                         ) {
-                            request.abort();
+                            return request.abort();
                         }
-                        else {
-                            request.continue();
-                        }
-                    });
-                }
-                else {
-                    await page.setRequestInterception(false);
+                    }
+
+                    request.continue();
                 }
 
-                // Rate limiting check
+                // Add listener
+                page.on("request", onRequest);
+
+                // Error response and rate limiting check
                 page.on("response",  response => {
                     if (response.status() === 429) {
                         logger.warn(tag, "Error 429 too many requests. You would probably need to use a higher 'slowMo' value and/or reduce the number of concurrent queries.");
+                    }
+                    else if (response.status() >= 400) {
+                        logger.warn(tag, response.status(), `Error for request ${response.request()}`)
                     }
                 });
 

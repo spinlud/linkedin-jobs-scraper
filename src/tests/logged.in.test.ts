@@ -3,9 +3,9 @@ import { IQuery, IQueryOptions } from "../scraper/query";
 import { killChromium } from "../utils/browser";
 import {
     LinkedinScraper,
-    ETimeFilterOptions,
-    ERelevanceFilterOptions,
-    EExperienceLevelOptions,
+    timeFilter,
+    relevanceFilter,
+    experienceLevelFilter,
     events,
 } from "..";
 
@@ -79,8 +79,8 @@ describe('[TEST]', () => {
     const globalOptions: IQueryOptions = {
         optimize: false,
         filters: {
-            time: ETimeFilterOptions.MONTH,
-            relevance: ERelevanceFilterOptions.RECENT,
+            time: timeFilter.MONTH,
+            relevance: relevanceFilter.RECENT,
         },
     };
 
@@ -94,7 +94,7 @@ describe('[TEST]', () => {
                 "--remote-debugging-address=0.0.0.0",
                 "--remote-debugging-port=9222",
             ],
-            slowMo: 400,
+            slowMo: 800,
         });
 
         scraper.on(events.scraper.data, onDataFn);

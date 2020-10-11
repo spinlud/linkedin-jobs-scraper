@@ -3,10 +3,10 @@ import { IQuery, IQueryOptions } from "../scraper/query";
 import { killChromium } from "../utils/browser";
 import {
     LinkedinScraper,
-    ETimeFilterOptions,
-    ERelevanceFilterOptions,
-    EExperienceLevelOptions,
-    events,
+    timeFilter,
+    relevanceFilter,
+    experienceLevelFilter,
+    events, typeFilter,
 } from "..";
 
 describe('[TEST]', () => {
@@ -79,8 +79,9 @@ describe('[TEST]', () => {
     const globalOptions: IQueryOptions = {
         optimize: false,
         filters: {
-            time: ETimeFilterOptions.MONTH,
-            relevance: ERelevanceFilterOptions.RECENT,
+            relevance: relevanceFilter.RECENT,
+            time: timeFilter.MONTH,
+            type: [typeFilter.FULL_TIME, typeFilter.CONTRACT]
         },
     };
 

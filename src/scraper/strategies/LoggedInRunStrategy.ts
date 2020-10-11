@@ -5,6 +5,7 @@ import { events } from "../events";
 import { sleep } from "../../utils/utils";
 import { IQuery } from "../query";
 import { logger } from "../../logger/logger";
+import { urls } from "../constants";
 
 export const selectors = {
     container: '.jobs-search-two-pane__container',
@@ -171,6 +172,13 @@ export class LoggedInRunStrategy extends RunStrategy {
         let tag = `[${query.query}][${location}]`;
         let processed = 0;
         let paginationIndex = 1;
+
+        // Navigate to home page
+        logger.debug(tag, "Opening", urls.home);
+
+        await page.goto(urls.home, {
+            waitUntil: 'networkidle2',
+        });
 
         // Set cookie
         logger.info("Setting authentication cookie");

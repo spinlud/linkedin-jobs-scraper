@@ -7,6 +7,7 @@ import { logger } from "../../logger/logger";
 
 export const selectors = {
     container: ".results__container.results__container--two-pane",
+    jobs: ".jobs-search__results-list li",
     links: ".jobs-search__results-list li a.result-card__full-card-link",
     applyLink: "a[data-is-offsite-apply=true]",
     dates: 'time',
@@ -210,6 +211,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
             while (jobIndex < jobLinksTot && processed < query.options!.limit!) {
                 tag = `[${query.query}][${location}][${processed + 1}]`;
 
+                let jobId;
                 let jobLink;
                 let jobApplyLink;
                 let jobTitle;
@@ -233,8 +235,9 @@ export class LoggedOutRunStrategy extends RunStrategy {
                         selectors.dates,
                     ]);
 
-                    [jobTitle, jobCompany, jobPlace, jobDate] = await page.evaluate(
+                    [jobId, jobTitle, jobCompany, jobPlace, jobDate] = await page.evaluate(
                         (
+                            jobsSelector: string,
                             linksSelector: string,
                             companiesSelector: string,
                             placesSelector: string,
@@ -242,6 +245,8 @@ export class LoggedOutRunStrategy extends RunStrategy {
                             jobIndex: number
                         ) => {
                             return [
+                                (<HTMLElement>document.querySelectorAll(jobsSelector)[jobIndex])
+                                    .getAttribute("data-id"),
                                 (<HTMLElement>document.querySelectorAll(linksSelector)[jobIndex]).innerText,
                                 (<HTMLElement>document.querySelectorAll(companiesSelector)[jobIndex]).innerText,
                                 (<HTMLElement>document.querySelectorAll(placesSelector)[jobIndex]).innerText,
@@ -249,6 +254,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
                                     .getAttribute('datetime')
                             ];
                         },
+                        selectors.jobs,
                         selectors.links,
                         selectors.companies,
                         selectors.places,
@@ -364,6 +370,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
                 this.scraper.emit(events.scraper.data, {
                     query: query.query || "",
                     location: location,
+                    jobId: jobId!,
                     link: jobLink!,
                     ...jobApplyLink && { applyLink: jobApplyLink },
                     title: jobTitle!,

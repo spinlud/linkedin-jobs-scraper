@@ -15,6 +15,7 @@ describe('[TEST]', () => {
     const onDataFn = (data: IData): void => {
         expect(data.query).toBeDefined();
         expect(data.location).toBeDefined();
+        expect(data.jobId).toBeDefined();
         expect(data.title).toBeDefined();
         expect(data.company).toBeDefined();
         expect(data.place).toBeDefined();
@@ -28,6 +29,7 @@ describe('[TEST]', () => {
         expect(data.industries).toBeDefined();
 
         expect(data.location.length).toBeGreaterThan(0);
+        expect(data.jobId.length).toBeGreaterThan(0);
         expect(data.title.length).toBeGreaterThan(0);
         expect(data.place.length).toBeGreaterThan(0);
         expect(data.description.length).toBeGreaterThan(0);
@@ -38,6 +40,8 @@ describe('[TEST]', () => {
         if (data.applyLink) {
             expect(() => new URL(data.applyLink!)).not.toThrow();
         }
+
+        console.log("[ON_DATA]", "OK", data.jobId);
     };
 
     const onErrorFn = (err: Error | string) => {

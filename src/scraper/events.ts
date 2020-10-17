@@ -3,6 +3,7 @@ type BrowserEvent = "disconnected" | "targetchanged" | "targetcreated" | "target
 export interface IData {
     query: string;
     location: string;
+    jobId: string;
     link: string;
     applyLink?: string;
     title: string;

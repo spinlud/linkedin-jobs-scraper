@@ -8,17 +8,18 @@ import { logger } from "../../logger/logger";
 import { urls } from "../constants";
 
 export const selectors = {
-    container: '.jobs-search-two-pane__container',
-    chatPanel: '.msg-overlay-list-bubble',
-    links: 'a.job-card-container__link.job-card-list__title',
-    companies: '.job-card-container .artdeco-entity-lockup__subtitle',
-    places: '.job-card-container .artdeco-entity-lockup__caption',
-    dates: '.job-card-container time',
-    description: '.jobs-description',
-    detailsTop: '.jobs-details-top-card',
-    details: '.jobs-details__main-content',
-    criteria: '.jobs-box__group h3',
-    pagination: '.jobs-search-two-pane__pagination',
+    container: ".jobs-search-two-pane__container",
+    chatPanel: ".msg-overlay-list-bubble",
+    jobs: ".job-card-container",
+    links: "a.job-card-container__link.job-card-list__title",
+    companies: ".job-card-container .artdeco-entity-lockup__subtitle",
+    places: ".job-card-container .artdeco-entity-lockup__caption",
+    dates: ".job-card-container time",
+    description: ".jobs-description",
+    detailsTop: ".jobs-details-top-card",
+    details: ".jobs-details__main-content",
+    criteria: ".jobs-box__group h3",
+    pagination: ".jobs-search-two-pane__pagination",
     paginationBtn: (index: number) => `li[data-test-pagination-page-btn="${index}"] button`,
 };
 
@@ -253,6 +254,7 @@ export class LoggedInRunStrategy extends RunStrategy {
             while (jobIndex < jobLinksTot && processed < query.options!.limit!) {
                 tag = `[${query.query}][${location}][${processed + 1}]`;
 
+                let jobId;
                 let jobLink;
                 let jobTitle;
                 let jobCompany;
@@ -275,14 +277,19 @@ export class LoggedInRunStrategy extends RunStrategy {
                         selectors.dates,
                     ]);
 
-                    [jobTitle, jobCompany, jobPlace, jobDate] = await page.evaluate(
+                    [jobId, jobTitle, jobCompany, jobPlace, jobDate] = await page.evaluate(
                         (
+                            jobsSelector: string,
                             linksSelector: string,
                             companiesSelector: string,
                             placesSelector: string,
                             datesSelector: string,
                             jobIndex: number
                         ) => {
+                            const jobId = document.querySelectorAll(jobsSelector)[jobIndex] ?
+                                (<HTMLElement>document.querySelectorAll(jobsSelector)[jobIndex])
+                                    .getAttribute("data-job-id") : "";
+
                             const title = document.querySelectorAll(linksSelector)[jobIndex] ?
                                 (<HTMLElement>document.querySelectorAll(linksSelector)[jobIndex]).innerText : "";
 
@@ -297,12 +304,14 @@ export class LoggedInRunStrategy extends RunStrategy {
                                     .getAttribute('datetime') : "";
 
                             return [
+                                jobId,
                                 title,
                                 company,
                                 place,
                                 date,
                             ];
                         },
+                        selectors.jobs,
                         selectors.links,
                         selectors.companies,
                         selectors.places,
@@ -426,6 +435,7 @@ export class LoggedInRunStrategy extends RunStrategy {
                 this.scraper.emit(events.scraper.data, {
                     query: query.query || "",
                     location: location,
+                    jobId: jobId!,
                     link: jobLink!,
                     title: jobTitle!,
                     company: jobCompany!,

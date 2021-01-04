@@ -13,7 +13,7 @@ export abstract class RunStrategy {
         this.scraper = scraper;
     }
 
-    abstract async run(
+    abstract run(
         page: Page,
         url: string,
         query: IQuery,

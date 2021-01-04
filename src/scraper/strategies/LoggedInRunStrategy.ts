@@ -178,7 +178,7 @@ export class LoggedInRunStrategy extends RunStrategy {
         logger.debug(tag, "Opening", urls.home);
 
         await page.goto(urls.home, {
-            waitUntil: 'networkidle2',
+            waitUntil: 'load',
         });
 
         // Set cookie
@@ -192,7 +192,7 @@ export class LoggedInRunStrategy extends RunStrategy {
         logger.info(tag, "Opening", url);
 
         await page.goto(url, {
-            waitUntil: 'networkidle2',
+            waitUntil: 'load',
         });
 
         // Verify session

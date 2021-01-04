@@ -65,11 +65,11 @@ export abstract class Scraper extends (EventEmitter as new () => TypedEmitter<IE
      * @param {IQueryOptions} [options]
      * @return {Promise<void>}
      */
-    abstract async run (queries: IQuery | IQuery[], options?: IQueryOptions): Promise<void>;
+    abstract run (queries: IQuery | IQuery[], options?: IQueryOptions): Promise<void>;
 
     /**
      * Close scraper browser instance
      * @returns {Promise<void>}
      */
-    abstract async close(): Promise<void>;
+    abstract close(): Promise<void>;
 }

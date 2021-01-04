@@ -1,0 +1,33 @@
+name: ci
+on: [push, workflow_dispatch]
+
+jobs:
+  container-job:
+    runs-on: ubuntu-latest
+    container: node:12.20-buster-slim
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm run test-logged-in
+        env:
+          DEBUG: scraper:*
+          LI_AT_COOKIE: ${{ secrets.LI_AT_COOKIE }}
+
+      - name: Check version changes
+        uses: EndBug/version-check@v1
+        id: check
+
+      - name: Publish
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          npm set registry "https://registry.npmjs.org"
+          npm set //registry.npmjs.org/:_authToken ${{ secrets.NPM_PUBLISH_TOKEN }}
+          npm publish

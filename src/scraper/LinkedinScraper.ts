@@ -39,11 +39,11 @@ class LinkedinScraper extends Scraper {
 
         if (config.LI_AT_COOKIE) {
             this._runStrategy = new LoggedInRunStrategy(this);
-            logger.info("Env variable LI_AT_COOKIE detected. Implementing LoggedInRunStrategy.")
+            logger.info(`Env variable LI_AT_COOKIE detected. Using ${LoggedInRunStrategy.name}`)
         }
         else {
             this._runStrategy = new LoggedOutRunStrategy(this);
-            logger.info("Implementing LoggedOutRunStrategy.")
+            logger.info(`Using ${LoggedOutRunStrategy.name}`)
         }
     }
 

@@ -172,7 +172,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
         logger.info(tag, "Opening", url);
 
         await page.goto(url, {
-            waitUntil: 'networkidle2',
+            waitUntil: 'load',
         });
 
         // Verify if authentication is required

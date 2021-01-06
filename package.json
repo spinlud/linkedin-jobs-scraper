@@ -1,14 +1,14 @@
 {
   "name": "linkedin-jobs-scraper",
-  "version": "5.3.1",
+  "version": "5.4.0",
   "description": "Scrape public available jobs on Linkedin using headless browser",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "scripts": {
     "clean": "rm -fr build",
     "build": "npm run clean && tsc",
-    "test-logged-in": "DEBUG=scraper:* jest logged.in.test.ts",
-    "test-logged-out": "DEBUG=scraper:* jest logged.out.test.ts"
+    "test-logged-in": "DEBUG=scraper:info jest logged.in.test.ts",
+    "test-logged-out": "DEBUG=scraper:info jest logged.out.test.ts"
   },
   "repository": {
     "type": "git",

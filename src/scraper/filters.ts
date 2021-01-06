@@ -18,6 +18,8 @@ export const typeFilter = {
     TEMPORARY: "T",
     CONTRACT: "C",
     INTERNSHIP: "I",
+    VOLUNTEER: "V",
+    OTHER: "O",
 }
 
 export const experienceLevelFilter = {
@@ -26,4 +28,5 @@ export const experienceLevelFilter = {
     ASSOCIATE: "3",
     MID_SENIOR: "4",
     DIRECTOR: "5",
+    EXECUTIVE: "6",
 }

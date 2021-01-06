@@ -40,8 +40,6 @@ describe('[TEST]', () => {
         if (data.applyLink) {
             expect(() => new URL(data.applyLink!)).not.toThrow();
         }
-
-        console.log("[ON_DATA]", "OK", data.jobId);
     };
 
     const onErrorFn = (err: Error | string) => {
@@ -54,28 +52,22 @@ describe('[TEST]', () => {
 
     const queriesSerial1: IQuery[] = [
         {
-            query: "",
+            query: "c#",
             options: {
-                limit: 10,
+                locations: ['Finland'],
+                limit: 50,
+                filters: {
+                    time: timeFilter.WEEK,
+                }
             },
         },
-    ];
-
-    const queriesSerial2: IQuery[] = [
         {
             query: 'Engineer',
             options: {
-                limit: 5,
+                limit: 27,
                 filters: {
                     companyJobsUrl: "https://www.linkedin.com/jobs/search/?f_C=1441%2C10667&geoId=101165590&keywords=engineer&location=United%20Kingdom",
                 },
-            },
-        },
-        {
-            query: "Designer",
-            options: {
-                limit: 5,
-                optimize: true,
             },
         },
     ];
@@ -98,7 +90,7 @@ describe('[TEST]', () => {
                 "--remote-debugging-address=0.0.0.0",
                 "--remote-debugging-port=9222",
             ],
-            slowMo: 600,
+            slowMo: 200,
         });
 
         scraper.on(events.scraper.data, onDataFn);
@@ -109,7 +101,7 @@ describe('[TEST]', () => {
         try {
             await Promise.all([
                 scraper.run(queriesSerial1, globalOptions),
-                scraper.run(queriesSerial2, globalOptions),
+                // scraper.run(queriesSerial2, globalOptions),
             ]);
         }
         finally {

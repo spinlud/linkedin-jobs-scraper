@@ -64,6 +64,7 @@ describe('[TEST]', () => {
         {
             query: 'Engineer',
             options: {
+                locations: ['Worldwide'],
                 limit: 27,
                 filters: {
                     companyJobsUrl: "https://www.linkedin.com/jobs/search/?f_C=1441%2C10667&geoId=101165590&keywords=engineer&location=United%20Kingdom",

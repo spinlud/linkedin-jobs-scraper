@@ -190,10 +190,10 @@ export class LoggedOutRunStrategy extends RunStrategy {
             return { exit: false };
         }
 
+        let jobIndex = 0;
+
         // Pagination loop
         while (processed < query.options!.limit!) {
-            let jobIndex = 0;
-
             // Get number of all job links in the page
             let jobLinksTot = await page.evaluate(
                 (linksSelector: string) => document.querySelectorAll(linksSelector).length,
@@ -371,6 +371,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
                     query: query.query || "",
                     location: location,
                     jobId: jobId!,
+                    jobIndex: jobIndex,
                     link: jobLink!,
                     ...jobApplyLink && { applyLink: jobApplyLink },
                     title: jobTitle!,

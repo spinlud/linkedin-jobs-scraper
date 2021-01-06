@@ -4,6 +4,7 @@ export interface IData {
     query: string;
     location: string;
     jobId: string;
+    jobIndex: number; // Job index during search, only useful for debug
     link: string;
     applyLink?: string;
     title: string;

@@ -107,6 +107,7 @@ export class LoggedInRunStrategy extends RunStrategy {
         let loaded = false;
         let clicked = false;
 
+        // Wait for pagination html to load
         try {
             await page.waitForSelector(selectors.pagination, {timeout: timeout});
         }
@@ -117,23 +118,31 @@ export class LoggedInRunStrategy extends RunStrategy {
             };
         }
 
+        // Try click next pagination button (if exists)
+        clicked = await page.evaluate(
+            (selector) => {
+                const button = document.querySelector(selector);
+
+                if (button) {
+                    button.click();
+                    return true;
+                } else {
+                    return false;
+                }
+            },
+            paginationBtnSelector
+        );
+
+        // Failed to click next pagination button (pagination exhausted)
+        if (!clicked) {
+            return {
+                success: false,
+                error: `Pagination exhausted`
+            };
+        }
+
+        // Wait for new jobs to load
         while (!loaded) {
-            if (!clicked) {
-                clicked = await page.evaluate(
-                    (selector) => {
-                        const button = document.querySelector(selector);
-
-                        if (button) {
-                            button.click();
-                            return true;
-                        } else {
-                            return false;
-                        }
-                    },
-                    paginationBtnSelector
-                );
-            }
-
             loaded = await page.evaluate(
                 (selector) => {
                     return document.querySelectorAll(selector).length > 0;
@@ -436,6 +445,7 @@ export class LoggedInRunStrategy extends RunStrategy {
                     query: query.query || "",
                     location: location,
                     jobId: jobId!,
+                    jobIndex: jobIndex,
                     link: jobLink!,
                     title: jobTitle!,
                     company: jobCompany!,

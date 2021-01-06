@@ -2,7 +2,7 @@ name: ci
 on: [push, workflow_dispatch]
 
 jobs:
-  container-job:
+  job:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository code
@@ -27,6 +27,8 @@ jobs:
 
       - name: Check version changes
         uses: EndBug/version-check@v1
+        with:
+          diff-search: true
         id: check
 
       - name: Publish

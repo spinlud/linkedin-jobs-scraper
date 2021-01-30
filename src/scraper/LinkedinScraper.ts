@@ -1,9 +1,8 @@
-import { EventEmitter } from "events";
-import TypedEmitter from "typed-emitter";
 import deepmerge from "deepmerge";
 import puppeteer from "puppeteer-extra";
+import useProxy from 'puppeteer-page-proxy';
 import { config } from "../config";
-import {Browser, BrowserContext, Page, LaunchOptions, Request} from "puppeteer";
+import { Browser, BrowserContext, Request } from "puppeteer";
 import { events, IEventListeners } from "./events";
 import { states } from "./states";
 import { browserDefaults, queryOptionsDefault } from "./defaults";
@@ -12,7 +11,7 @@ import { getQueryParams } from "../utils/url";
 import { urls, } from "./constants";
 import { IQuery, IQueryOptions, validateQuery } from "./query";
 import { getRandomUserAgent } from "../utils/browser";
-import { Scraper } from "./Scraper";
+import { Scraper, ScraperOptions } from "./Scraper";
 import { RunStrategy, LoggedInRunStrategy, LoggedOutRunStrategy } from "./strategies";
 import { logger } from "../logger/logger";
 
@@ -21,7 +20,7 @@ puppeteer.use(require("puppeteer-extra-plugin-stealth")());
 /**
  * Main class
  * @extends EventEmitter
- * @param options {LaunchOptions} Puppeteer browser options, for more informations see https://pptr.dev/#?product=Puppeteer&version=v2.0.0&show=api-puppeteerlaunchoptions
+ * @param options {ScraperOptions} Puppeteer browser options, for more informations see https://pptr.dev/#?product=Puppeteer&version=v2.0.0&show=api-puppeteerlaunchoptions
  * @constructor
  */
 class LinkedinScraper extends Scraper {
@@ -32,9 +31,9 @@ class LinkedinScraper extends Scraper {
 
     /**
      * @constructor
-     * @param {LaunchOptions} options
+     * @param {ScraperOptions} options
      */
-    constructor(options: LaunchOptions) {
+    constructor(options: ScraperOptions) {
         super(options);
 
         if (config.LI_AT_COOKIE) {
@@ -210,7 +209,9 @@ class LinkedinScraper extends Scraper {
                 // Enable request interception
                 await page.setRequestInterception(true);
 
-                const onRequest = (request: Request) => {
+                let proxyIndex = 0;
+
+                const onRequest = async (request: Request) => {
                     const url = new URL(request.url());
                     const domain = url.hostname.split(".").slice(-2).join(".").toLowerCase();
 
@@ -245,7 +246,13 @@ class LinkedinScraper extends Scraper {
                         }
                     }
 
-                    request.continue();
+                    if (this.options.proxies) {
+                        // Rotate proxy for each request
+                        await useProxy(request, this.options.proxies[proxyIndex++ % this.options.proxies.length]);
+                    }
+                    else {
+                        await Promise.resolve(request.continue());
+                    }
                 }
 
                 // Add listener

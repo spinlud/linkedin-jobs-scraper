@@ -13,6 +13,7 @@
 * [LinkedinScraper](#linkedinscraper)
 * [Anonymous vs authenticated session](#anonymous-vs-authenticated-session)
 * [Rate limiting](#rate-limiting)
+* [Proxy](#proxy)
 * [Filters](#filters)
 * [Company filter](#company-filter)
 * [Logger](#logger)
@@ -273,7 +274,27 @@ await Promise.all([
     scraper.run([...]),
     scraper.run([...]),
 ]);
-```  
+```
+
+You can also consider to use one or more proxy (see [Proxy](#proxy)).
+
+## Proxy
+You can add a list of proxies that will be automatically rotated for each request:
+
+```js
+const scraper = new LinkedinScraper({
+    headless: false,
+    slowMo: 100,
+    args: [
+        "--lang=en-GB",
+    ],
+    proxies: [
+        '<proxy1_address>:<proxy1_port>',
+        '<proxy2_address>:<proxy2_port>',
+        // ...
+    ]
+});
+```
 
 ## Filters
 It is possible to customize queries with the following filters:

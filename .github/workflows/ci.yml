@@ -1,5 +1,5 @@
 name: ci
-on: [push, workflow_dispatch]
+on: [ push, workflow_dispatch ]
 
 jobs:
   job:
@@ -25,15 +25,16 @@ jobs:
           DEBUG: scraper:*
           LI_AT_COOKIE: ${{ secrets.LI_AT_COOKIE }}
 
-      - name: Check version changes
-        uses: EndBug/version-check@v1
-        with:
-          diff-search: true
-        id: check
-
-      - name: Publish
-        if: steps.check.outputs.changed == 'true'
+      - name: Publish-Latest
+        if: contains(github.ref, 'latest') # Tag commit with 'latest' string to publish
         run: |
           npm set registry "https://registry.npmjs.org"
           npm set //registry.npmjs.org/:_authToken ${{ secrets.NPM_PUBLISH_TOKEN }}
-          npm publish
+          npm publish --tag latest
+
+      - name: Publish-Next
+        if: contains(github.ref, 'next') # Tag commit with 'latest' string to publish
+        run: |
+          npm set registry "https://registry.npmjs.org"
+          npm set //registry.npmjs.org/:_authToken ${{ secrets.NPM_PUBLISH_TOKEN }}
+          npm publish --tag next

@@ -5,14 +5,16 @@ import { LaunchOptions } from "puppeteer";
 import { IQuery, IQueryOptions } from "./query";
 import { logger } from "../logger/logger";
 
+export type ScraperOptions = LaunchOptions & { proxies?: string[] };
+
 export abstract class Scraper extends (EventEmitter as new () => TypedEmitter<IEventListeners>) {
-    public options: LaunchOptions;
+    public options: ScraperOptions;
 
     /**
      * @constructor
      * @param {LaunchOptions} options
      */
-    protected constructor(options: LaunchOptions) {
+    protected constructor(options: ScraperOptions) {
         super();
         this.options = options;
     }

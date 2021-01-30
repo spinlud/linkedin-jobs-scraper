@@ -44,7 +44,7 @@ const {
     // Concurrent queries will run on different pages within the same browser instance.
     const scraper = new LinkedinScraper({
         headless: true,
-        slowMo: 50,
+        slowMo: 100,
         args: [
             "--lang=en-GB",
         ],
@@ -96,19 +96,7 @@ const {
         .trim();
 
     // Run queries concurrently    
-    await Promise.all([        
-        scraper.run({
-            query: "Graphic Designer",
-            options: {
-                locations: ["London"],
-                descriptionFn: descriptionFn,
-                filters: {                    
-                    relevance: relevanceFilter.RELEVANT,
-                    time: timeFilter.MONTH,                                      
-                }
-            }
-        }),
-    
+    await Promise.all([
         // Run queries serially
         scraper.run([
             {

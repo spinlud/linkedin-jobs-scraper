@@ -8,7 +8,7 @@ import {
     // Concurrent queries will run on different pages within the same browser instance.
     const scraper = new LinkedinScraper({
         headless: true,
-        slowMo: 250,
+        slowMo: 500,
         args: [
             "--remote-debugging-address=0.0.0.0",
             "--remote-debugging-port=9222",

@@ -98,7 +98,7 @@ describe('[TEST]', () => {
                 "--remote-debugging-address=0.0.0.0",
                 "--remote-debugging-port=9222",
             ],
-            slowMo: 100,
+            slowMo: 150,
         });
 
         scraper.on(events.scraper.data, onDataFn);
@@ -106,10 +106,8 @@ describe('[TEST]', () => {
         scraper.on(events.scraper.end, onEndFn);
 
         try {
-            await Promise.all([
-                scraper.run(queriesSerial1, globalOptions),
-                scraper.run(queriesSerial2, globalOptions),
-            ]);
+            await scraper.run(queriesSerial1, globalOptions);
+            await scraper.run(queriesSerial2, globalOptions);
         }
         finally {
             await scraper.close();

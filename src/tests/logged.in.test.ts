@@ -58,6 +58,7 @@ describe('[TEST]', () => {
                 limit: 50,
                 filters: {
                     time: timeFilter.WEEK,
+                    experience: experienceLevelFilter.MID_SENIOR,
                 }
             },
         },
@@ -102,7 +103,6 @@ describe('[TEST]', () => {
         try {
             await Promise.all([
                 scraper.run(queriesSerial1, globalOptions),
-                // scraper.run(queriesSerial2, globalOptions),
             ]);
         }
         finally {

@@ -26,14 +26,14 @@ jobs:
           LI_AT_COOKIE: ${{ secrets.LI_AT_COOKIE }}
 
       - name: Publish-Latest
-        if: contains(github.ref, 'latest') # Tag commit with 'latest' string to publish
+        if: contains(github.ref, 'latest') # Tag commit with 'latest' to publish
         run: |
           npm set registry "https://registry.npmjs.org"
           npm set //registry.npmjs.org/:_authToken ${{ secrets.NPM_PUBLISH_TOKEN }}
           npm publish --tag latest
 
       - name: Publish-Next
-        if: contains(github.ref, 'next') # Tag commit with 'latest' string to publish
+        if: contains(github.ref, 'next') # Tag commit with 'next' to publish
         run: |
           npm set registry "https://registry.npmjs.org"
           npm set //registry.npmjs.org/:_authToken ${{ secrets.NPM_PUBLISH_TOKEN }}

@@ -1,35 +1,43 @@
-import { LaunchOptions } from "puppeteer";
 import { IQueryOptions } from "./query";
+import { ScraperOptions } from "./Scraper";
 
-const browserDefaults: LaunchOptions = {
+const defaultWidth = 1472;
+const defaultHeight = 828;
+
+const browserDefaults: ScraperOptions = {
     headless: true,
     args: [
         "--enable-automation",
         "--start-maximized",
-        "--window-size=1472,828",
+        `--window-size=${defaultWidth},${defaultHeight}`,
         // "--single-process",
         "--lang=en-GB",
         "--no-sandbox",
         "--disable-setuid-sandbox",
-        "--disable-gpu",
         "--disable-dev-shm-usage",
-        "--no-sandbox",
+        "--disable-gpu",
+        "--disable-accelerated-2d-canvas",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
         "--proxy-server='direct://",
         "--proxy-bypass-list=*",
-        "--disable-accelerated-2d-canvas",
-        "--disable-gpu",
         "--allow-running-insecure-content",
         "--disable-web-security",
         "--disable-client-side-phishing-detection",
         "--disable-notifications",
         "--mute-audio",
     ],
+    // @ts-ignore
     defaultViewport: null,
     pipe: true,
-    slowMo: 100,
+    slowMo: 150,
 };
+
+
+
+
+
+
 
 const queryOptionsDefault: IQueryOptions = {
     locations: [],

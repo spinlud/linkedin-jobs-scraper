@@ -8,18 +8,19 @@ import { logger } from "../../logger/logger";
 import { urls } from "../constants";
 
 export const selectors = {
-    container: ".jobs-search-two-pane__container",
-    chatPanel: ".msg-overlay-list-bubble",
-    jobs: ".job-card-container",
-    links: "a.job-card-container__link.job-card-list__title",
-    companies: ".job-card-container .artdeco-entity-lockup__subtitle",
-    places: ".job-card-container .artdeco-entity-lockup__caption",
-    dates: ".job-card-container time",
-    description: ".jobs-description",
-    detailsTop: ".jobs-details-top-card",
-    details: ".jobs-details__main-content",
-    criteria: ".jobs-box__group h3",
-    pagination: ".jobs-search-two-pane__pagination",
+    container: '.jobs-search-two-pane__container',
+    chatPanel: '.msg-overlay-list-bubble',
+    jobs: '.job-card-container',
+    links: 'a.job-card-container__link.job-card-list__title',
+    companies: '.job-card-container .artdeco-entity-lockup__subtitle',
+    places: '.job-card-container .artdeco-entity-lockup__caption',
+    dates: '.job-card-container time',
+    description: '.jobs-description',
+    detailsTop: '.jobs-details-top-card',
+    details: '.jobs-details__main-content',
+    criteria: '.jobs-box__group h3',
+    pagination: '.jobs-search-two-pane__pagination',
+    paginationNextBtn: 'li[data-test-pagination-page-btn].selected + li',
     paginationBtn: (index: number) => `li[data-test-pagination-page-btn="${index}"] button`,
 };
 
@@ -167,6 +168,123 @@ export class LoggedInRunStrategy extends RunStrategy {
     };
 
     /**
+     * Try to paginate
+     * @param {Page} page
+     * @param {number} timeout
+     * @param {string} tag
+     * @returns {Promise<ILoadResult>}
+     * @static
+     * @private
+     */
+    private static _paginate_new = async (
+        page: Page,
+        tag: string,
+        timeout: number = 2000,
+    ): Promise<ILoadResult> => {
+        // Check if there is a new page to load
+        try {
+            await page.waitForSelector(selectors.paginationNextBtn, {timeout: timeout});
+        }
+        catch(err) {
+            return {
+                success: false,
+                error: `There are no more pages to visit`
+            };
+        }
+
+        const url = new URL(page.url());
+
+        // Extract offset from url
+        let offset = parseInt(url.searchParams.get('start') || "0", 10);
+        offset += 25;
+
+        // Update offset in url
+        url.searchParams.set('start', '' + offset);
+
+        logger.debug(tag, "Opening", url.toString());
+
+        // Navigate new url
+        await page.goto(url.toString(), {
+            waitUntil: 'load',
+        });
+
+        const pollingTime = 100;
+        let elapsed = 0;
+        let loaded = false;
+
+        // Wait for new jobs to load
+        while (!loaded) {
+            loaded = await page.evaluate(
+                (selector) => {
+                    return document.querySelectorAll(selector).length > 0;
+                },
+                selectors.links,
+            );
+
+            if (loaded) return { success: true };
+
+            await sleep(pollingTime);
+            elapsed += pollingTime;
+
+            if (elapsed >= timeout) {
+                return {
+                    success: false,
+                    error: `Timeout on pagination`
+                };
+            }
+        }
+
+        return { success: true };
+    };
+
+    /**
+     * Hide chat panel
+     * @param {Page} page
+     * @param {string} tag
+     */
+    private static _hideChatPanel = async (
+        page: Page,
+        tag: string,
+    ): Promise<void> => {
+        try {
+            await page.evaluate((selector) => {
+                    const div = document.querySelector(selector);
+                    if (div) {
+                        div.style.display = "none";
+                    }
+                },
+                selectors.chatPanel);
+        }
+        catch (err) {
+            logger.debug(tag, "Failed to hide chat panel");
+        }
+    };
+
+    /**
+     * Accept cookies
+     * @param {Page} page
+     * @param {string} tag
+     */
+    private static _acceptCookies = async (
+        page: Page,
+        tag: string,
+    ): Promise<void> => {
+        try {
+            await page.evaluate(() => {
+                const buttons = Array.from(document.querySelectorAll('button'));
+                const cookieButton = buttons.find(e => e.innerText.includes('Accept cookies'));
+
+                if (cookieButton) {
+                    cookieButton.click();
+                }
+            });
+        }
+        catch (err) {
+            logger.debug(tag, "Failed to accept cookies");
+        }
+    };
+
+    /**
      * Run strategy
      * @param page
      * @param url
@@ -219,20 +337,6 @@ export class LoggedInRunStrategy extends RunStrategy {
             return { exit: false };
         }
 
-        // Try to hide chat panel
-        try {
-            await page.evaluate((selector) => {
-                    const div = document.querySelector(selector);
-                    if (div) {
-                        div.style.display = "none";
-                    }
-                },
-                selectors.chatPanel);
-        }
-        catch (err) {
-            logger.info(tag, "Failed to hide chat panel");
-        }
-
         // Pagination loop
         while (processed < query.options!.limit!) {
             // Verify session in the loop
@@ -243,6 +347,12 @@ export class LoggedInRunStrategy extends RunStrategy {
             else {
                 logger.info(tag, "Session is valid");
             }
+
+            // Try to hide chat panel
+            await LoggedInRunStrategy._hideChatPanel(page, tag);
+
+            // Accept cookies
+            await LoggedInRunStrategy._acceptCookies(page, tag);
 
             let jobIndex = 0;
 
@@ -485,7 +595,8 @@ export class LoggedInRunStrategy extends RunStrategy {
             // Try pagination to load more jobs
             paginationIndex += 1;
             logger.info(tag, `Pagination requested (${paginationIndex})`);
-            const paginationResult = await LoggedInRunStrategy._paginate(page, paginationIndex);
+            // const paginationResult = await LoggedInRunStrategy._paginate(page, paginationIndex);
+            const paginationResult = await LoggedInRunStrategy._paginate_new(page, tag);
 
             // Check if loading jobs has failed
             if (!paginationResult.success) {

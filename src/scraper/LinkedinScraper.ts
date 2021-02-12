@@ -1,21 +1,20 @@
-import deepmerge from "deepmerge";
-import puppeteer from "puppeteer-extra";
-import useProxy from 'puppeteer-page-proxy';
-import { config } from "../config";
-import { Browser, BrowserContext, Request } from "puppeteer";
-import { events, IEventListeners } from "./events";
-import { states } from "./states";
-import { browserDefaults, queryOptionsDefault } from "./defaults";
-import { sleep } from "../utils/utils";
-import { getQueryParams } from "../utils/url";
-import { urls, } from "./constants";
-import { IQuery, IQueryOptions, validateQuery } from "./query";
-import { getRandomUserAgent } from "../utils/browser";
-import { Scraper, ScraperOptions } from "./Scraper";
-import { RunStrategy, LoggedInRunStrategy, LoggedOutRunStrategy } from "./strategies";
-import { logger } from "../logger/logger";
+import deepmerge from 'deepmerge';
+import { config } from '../config';
+import puppeteer from 'puppeteer-extra';
+import { Browser, BrowserContext, HTTPRequest } from 'puppeteer';
+import { events, IEventListeners } from './events';
+import { states } from './states';
+import { browserDefaults, queryOptionsDefault } from './defaults';
+import { sleep } from '../utils/utils';
+import { getQueryParams } from '../utils/url';
+import { urls, } from './constants';
+import { IQuery, IQueryOptions, validateQuery } from './query';
+import { getRandomUserAgent } from '../utils/browser';
+import { Scraper, ScraperOptions } from './Scraper';
+import { RunStrategy, LoggedInRunStrategy, LoggedOutRunStrategy } from './strategies';
+import { logger } from '../logger/logger';
 
-puppeteer.use(require("puppeteer-extra-plugin-stealth")());
+puppeteer.use(require('puppeteer-extra-plugin-stealth')());
 
 /**
  * Main class
@@ -59,6 +58,9 @@ class LinkedinScraper extends Scraper {
         logger.info('Setting chrome launch options', launchOptions);
         this._browser = await puppeteer.launch(launchOptions);
 
+        // Close initial browser page
+        await (await this._browser.pages())[0].close();
+
         this._context = await this._browser.createIncognitoBrowserContext();
 
         this._browser.on(events.puppeteer.browser.disconnected, () => {
@@ -79,8 +81,6 @@ class LinkedinScraper extends Scraper {
 
         this._state = states.initialized;
     }
-
-
 
     /**
      * Build jobs search url
@@ -133,9 +133,7 @@ class LinkedinScraper extends Scraper {
             }
         }
 
-        url.searchParams.append("redirect", "false");
-        url.searchParams.append("position", "1");
-        url.searchParams.append("pageNum", "0");
+        url.searchParams.append("start", "0");
 
         return url.href;
     }
@@ -196,8 +194,8 @@ class LinkedinScraper extends Scraper {
 
                 // Method to create a faster Page
                 // From: https://github.com/shirshak55/scrapper-tools/blob/master/src/fastPage/index.ts#L113
-                const session = await page.target().createCDPSession()
-                await page.setBypassCSP(true)
+                const session = await page.target().createCDPSession();
+                await page.setBypassCSP(true);
                 await session.send('Page.enable');
                 await session.send('Page.setWebLifecycleState', {
                     state: 'active',
@@ -209,9 +207,7 @@ class LinkedinScraper extends Scraper {
                 // Enable request interception
                 await page.setRequestInterception(true);
 
-                let proxyIndex = 0;
-
-                const onRequest = async (request: Request) => {
+                const onRequest = async (request: HTTPRequest) => {
                     const url = new URL(request.url());
                     const domain = url.hostname.split(".").slice(-2).join(".").toLowerCase();
 
@@ -246,13 +242,7 @@ class LinkedinScraper extends Scraper {
                         }
                     }
 
-                    if (this.options.proxies) {
-                        // Rotate proxy for each request
-                        await useProxy(request, this.options.proxies[proxyIndex++ % this.options.proxies.length]);
-                    }
-                    else {
-                        await Promise.resolve(request.continue());
-                    }
+                    request.continue();
                 }
 
                 // Add listener

@@ -154,6 +154,30 @@ export class LoggedOutRunStrategy extends RunStrategy {
     };
 
     /**
+     * Accept cookies
+     * @param {Page} page
+     * @param {string} tag
+     */
+    private static _acceptCookies = async (
+        page: Page,
+        tag: string,
+    ): Promise<void> => {
+        try {
+            await page.evaluate(() => {
+                const buttons = Array.from(document.querySelectorAll('button'));
+                const cookieButton = buttons.find(e => e.innerText.includes('Accept cookies'));
+
+                if (cookieButton) {
+                    cookieButton.click();
+                }
+            });
+        }
+        catch (err) {
+            logger.debug(tag, "Failed to accept cookies");
+        }
+    };
+
+    /**
      * Run strategy
      * @param page
      * @param url
@@ -194,6 +218,8 @@ export class LoggedOutRunStrategy extends RunStrategy {
 
         // Pagination loop
         while (processed < query.options!.limit!) {
+            await LoggedOutRunStrategy._acceptCookies(page, tag);
+
             // Get number of all job links in the page
             let jobLinksTot = await page.evaluate(
                 (linksSelector: string) => document.querySelectorAll(linksSelector).length,

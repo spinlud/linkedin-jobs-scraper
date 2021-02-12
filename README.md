@@ -381,3 +381,5 @@ DEBUG=scraper:info node app.js
 
 ## License
 [MIT License](http://en.wikipedia.org/wiki/MIT_License)
+
+If you liked the project and want to contribute you can [donate something here](paypal.me/spinlud)! 

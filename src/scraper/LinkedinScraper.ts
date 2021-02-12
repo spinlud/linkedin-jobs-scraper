@@ -184,7 +184,6 @@ class LinkedinScraper extends Scraper {
         for (const query of queries) {
             // Locations loop
             for (const location of query.options!.locations!) {
-                // let processed = 0;
                 tag = `[${query.query}][${location}]`;
                 logger.info(tag, `Starting new query:`, `query="${query.query}"`, `location="${location}"`);
                 logger.info(tag, `Query options`, query.options);
@@ -192,10 +191,13 @@ class LinkedinScraper extends Scraper {
                 // Open new page in incognito context
                 const page = await this._context!.newPage();
 
-                // Method to create a faster Page
-                // From: https://github.com/shirshak55/scrapper-tools/blob/master/src/fastPage/index.ts#L113
+                // Create Chrome Developer Tools session
                 const session = await page.target().createCDPSession();
+
+                // Disable Content Security Policy: needed for pagination to work properly in anonymous mode
                 await page.setBypassCSP(true);
+
+                // Tricks to speed up page
                 await session.send('Page.enable');
                 await session.send('Page.setWebLifecycleState', {
                     state: 'active',

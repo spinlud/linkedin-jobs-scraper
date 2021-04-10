@@ -297,6 +297,8 @@ It is possible to customize queries with the following filters:
     * `ASSOCIATE`
     * `MID_SENIOR`
     * `DIRECTOR`
+- REMOTE:
+    * `REMOTE` (supported only with authenticated session)
     
 See the following example for more details:
 
@@ -307,6 +309,7 @@ const {
     timeFilter,
     typeFilter,
     experienceLevelFilter,
+    remoteFilter,
     events,
 } = require("linkedin-jobs-scraper");
 
@@ -321,6 +324,7 @@ const {
                     time: timeFilter.MONTH,
                     type: [typeFilter.FULL_TIME, typeFilter.CONTRACT], // string or array
                     experience: [experienceLevelFilter.ENTRY_LEVEL, experienceLevelFilter.MID_SENIOR], // string or array
+                    remote: remoteFilter.REMOTE, // supported only with authenticated session
                 }
             }
         }, {

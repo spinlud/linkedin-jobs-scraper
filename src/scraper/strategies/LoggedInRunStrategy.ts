@@ -16,6 +16,7 @@ export const selectors = {
     places: '.job-card-container .artdeco-entity-lockup__caption',
     dates: '.job-card-container time',
     description: '.jobs-description',
+    detailsPanel: '.jobs-search__job-details--container',
     detailsTop: '.jobs-details-top-card',
     details: '.jobs-details__main-content',
     criteria: '.jobs-box__group h3',
@@ -46,12 +47,14 @@ export class LoggedInRunStrategy extends RunStrategy {
     /**
      * Try to load job details
      * @param {Page} page
+     * @param {string} jobId
      * @param {number} timeout
      * @static
      * @private
      */
     private static _loadJobDetails = async (
         page: Page,
+        jobId: string,
         timeout: number = 2000,
     ): Promise<ILoadResult> => {
         const pollingTime = 100;
@@ -61,14 +64,15 @@ export class LoggedInRunStrategy extends RunStrategy {
         await sleep(pollingTime); // Baseline to wait
 
         while(!loaded) {
-            // We assume that job is loaded when description is present
             loaded = await page.evaluate(
-                (detailsSelector, descriptionSelector) => {
-                    const details = <HTMLElement>document.querySelector(detailsSelector);
-                    const description = <HTMLElement>document.querySelector(descriptionSelector);
-                    return details && description && description.innerText.length > 0;
+                (jobId, panelSelector, descriptionSelector) => {
+                    const detailsPanel = document.querySelector(panelSelector);
+                    const description = document.querySelector(descriptionSelector);
+                    return detailsPanel && detailsPanel.innerHTML.includes(jobId) &&
+                        description && description.innerText.length > 0;
                 },
-                selectors.details,
+                jobId,
+                selectors.detailsPanel,
                 selectors.description,
             );
 
@@ -455,7 +459,7 @@ export class LoggedInRunStrategy extends RunStrategy {
                             selectors.links,
                             jobIndex
                         ),
-                        LoggedInRunStrategy._loadJobDetails(page)
+                        LoggedInRunStrategy._loadJobDetails(page, jobId!)
                     ]);
 
                     // Check if loading job details has failed

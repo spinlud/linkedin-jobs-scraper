@@ -13,6 +13,7 @@ export const selectors = {
     dates: 'time',
     companies: ".result-card__subtitle.job-result-card__subtitle",
     places: ".job-result-card__location",
+    detailsPanel: ".details-pane__content",
     detailsTop: ".topcard__content-left",
     description: ".description__text",
     criteria: "li.job-criteria__item",
@@ -42,8 +43,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
     /**
      * Wait for job details to load
      * @param page {Page}
-     * @param jobTitle {string}
-     * @param jobCompany {string}
+     * @param jobId {string}
      * @param timeout {number}
      * @returns {Promise<ILoadResult>}
      * @static
@@ -51,8 +51,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
      */
     private static _loadJobDetails = async (
         page: Page,
-        jobTitle: string,
-        jobCompany: string,
+        jobId: string,
         timeout: number = 2000
     ): Promise<ILoadResult> => {
         const waitTime = 50;
@@ -62,18 +61,18 @@ export class LoggedOutRunStrategy extends RunStrategy {
         while(!loaded) {
             loaded = await page.evaluate(
                 (
-                    jobTitle: string,
-                    jobCompany: string,
-                    selector: string
+                    jobId: string,
+                    panelSelector: string,
+                    descriptionSelector: string
                 ) => {
-                    const jobHeaderRight = document.querySelector(selector) as HTMLElement;
-                    return jobHeaderRight &&
-                        jobHeaderRight.innerText.includes(jobTitle) &&
-                        jobHeaderRight.innerText.includes(jobCompany);
+                    const detailsPanel = document.querySelector(panelSelector) as HTMLElement;
+                    const description = document.querySelector(descriptionSelector) as HTMLElement;
+                    return detailsPanel && detailsPanel.innerHTML.includes(jobId) &&
+                        description && description.innerText.length > 0;
                 },
-                jobTitle,
-                jobCompany,
-                selectors.detailsTop
+                jobId,
+                selectors.detailsPanel,
+                selectors.description
             );
 
             if (loaded) return { success: true };
@@ -304,7 +303,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
                             jobIndex
                         ),
 
-                        LoggedOutRunStrategy._loadJobDetails(page, jobTitle!, jobCompany!),
+                        LoggedOutRunStrategy._loadJobDetails(page, jobId!),
                     ]);
 
                     // Check if loading job details has failed

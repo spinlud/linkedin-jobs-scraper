@@ -30,3 +30,7 @@ export const experienceLevelFilter = {
     DIRECTOR: "5",
     EXECUTIVE: "6",
 }
+
+export const remoteFilter = {
+    REMOTE: "true"
+}

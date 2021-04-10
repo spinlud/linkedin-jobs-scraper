@@ -1,5 +1,11 @@
 import { getQueryParams } from "../utils/url";
-import { relevanceFilter, timeFilter, typeFilter, experienceLevelFilter } from "./filters";
+import {
+    relevanceFilter,
+    timeFilter,
+    typeFilter,
+    experienceLevelFilter,
+    remoteFilter,
+} from "./filters";
 
 export interface IQuery {
     query?: string;
@@ -15,6 +21,7 @@ export interface IQueryOptions {
         time?: string;
         type?: string | string[];
         experience?: string | string[];
+        remote?: string;
     },
     descriptionFn?: () => string;
     optimize?: boolean;
@@ -159,6 +166,17 @@ export const validateQuery = (query: IQuery): IQueryValidationError[] => {
                             reason: `Must be one of ${allowed.join(", ")}`
                         });
                     }
+                }
+            }
+
+            if (filters.remote) {
+                const allowed = Object.values(remoteFilter);
+
+                if (!allowed.includes(filters.remote)) {
+                    errors.push({
+                        param: "options.filters.remote",
+                        reason: `Must be one of ${allowed.join(", ")}`
+                    });
                 }
             }
         }

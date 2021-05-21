@@ -93,7 +93,7 @@ describe('[TEST]', () => {
         delete process.env.LI_AT_COOKIE;
 
         const scraper = new LinkedinScraper({
-            headless: true,
+            headless: false,
             args: [
                 "--remote-debugging-address=0.0.0.0",
                 "--remote-debugging-port=9222",

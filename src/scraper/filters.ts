@@ -7,9 +7,9 @@ export const relevanceFilter = {
 
 export const timeFilter = {
     ANY: "",
-    DAY: config.LI_AT_COOKIE ? "r86400" : "1",
-    WEEK: config.LI_AT_COOKIE ? "r604800" : "1,2",
-    MONTH: config.LI_AT_COOKIE ? "r2592000" : "1,2,3,4",
+    DAY: "r86400",
+    WEEK: "r604800",
+    MONTH: "r2592000",
 }
 
 export const typeFilter = {

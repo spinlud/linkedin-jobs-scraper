@@ -112,8 +112,7 @@ class LinkedinScraper extends Scraper {
             }
 
             if (options.filters.time && options.filters.time.length) {
-                const key = config.LI_AT_COOKIE ? "f_TPR" : "f_TP";
-                url.searchParams.append(key, options.filters.time);
+                url.searchParams.append("f_TPR", options.filters.time);
             }
 
             if (options.filters.type) {

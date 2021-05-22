@@ -5,20 +5,59 @@ import { sleep } from "../../utils/utils";
 import { IQuery } from "../query";
 import { logger } from "../../logger/logger";
 
-export const selectors = {
-    container: ".results__container.results__container--two-pane",
-    jobs: ".jobs-search__results-list li",
-    links: ".jobs-search__results-list li a.result-card__full-card-link",
-    applyLink: "a[data-is-offsite-apply=true]",
-    dates: 'time',
-    companies: ".result-card__subtitle.job-result-card__subtitle",
-    places: ".job-result-card__location",
-    detailsPanel: ".details-pane__content",
-    detailsTop: ".topcard__content-left",
-    description: ".description__text",
-    criteria: "li.job-criteria__item",
-    seeMoreJobs: "button.infinite-scroller__show-more-button",
-};
+export class Selectors {
+    static switchSelectors = false;
+
+    static get container() {
+        return !this.switchSelectors ? '.results__container.results__container--two-pane' :
+            '.two-pane-serp-page__results-list';
+    }
+
+    static get jobs() {
+        return !this.switchSelectors ? '.jobs-search__results-list li' :
+            '.jobs-search__results-list li';
+    }
+
+    static get links() {
+        return !this.switchSelectors ? '.jobs-search__results-list li a.result-card__full-card-link' :
+            'a.base-card__full-link';
+    }
+
+    static get applyLink() {
+        return 'a[data-is-offsite-apply=true]';
+    }
+
+    static get dates() {
+        return 'time';
+    }
+
+    static get companies() {
+        return !this.switchSelectors ? '.result-card__subtitle.job-result-card__subtitle' :
+            '.base-search-card__subtitle';
+    }
+
+    static get places() {
+        return !this.switchSelectors ? '.job-result-card__location' :
+            '.job-search-card__location';
+    }
+
+    static get detailsPanel() {
+        return '.details-pane__content';
+    }
+
+    static get description() {
+        return '.description__text';
+    }
+
+    static get criteria() {
+        return !this.switchSelectors ? 'li.job-criteria__item' :
+            '.description__job-criteria-item';
+    }
+
+    static get seeMoreJobs() {
+        return 'button.infinite-scroller__show-more-button';
+    }
+}
 
 /**
  * @class LoggedOutRunStrategy
@@ -71,8 +110,8 @@ export class LoggedOutRunStrategy extends RunStrategy {
                         description && description.innerText.length > 0;
                 },
                 jobId,
-                selectors.detailsPanel,
-                selectors.description
+                Selectors.detailsPanel,
+                Selectors.description
             );
 
             if (loaded) return { success: true };
@@ -123,7 +162,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
                             return false;
                         }
                     },
-                    selectors.seeMoreJobs
+                    Selectors.seeMoreJobs
                 );
             }
 
@@ -132,7 +171,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
                     window.scrollTo(0, document.body.scrollHeight);
                     return document.querySelectorAll(selector).length > jobLinksTot;
                 },
-                selectors.links,
+                Selectors.links,
                 jobLinksTot
             );
 
@@ -204,14 +243,31 @@ export class LoggedOutRunStrategy extends RunStrategy {
             return { exit: true };
         }
 
-        // Wait for lazy loading jobs
+        // Linkedin seems to randomly load two different set of selectors:
+        // the following hack tries to switch between the two sets
+
+        // Try to load first set of selectors
         try {
-            await page.waitForSelector(selectors.container, { timeout: 5000 });
+            Selectors.switchSelectors = false;
+            logger.info(tag, 'Trying to load first selectors set');
+            logger.debug(tag, `Evaluating selectors`, [Selectors.container]);
+            await page.waitForSelector(Selectors.container, { timeout: 3000 });
         }
         catch(err) {
-            logger.info(tag, `No jobs found, skip`);
-            return { exit: false };
+            // Try to load second set of selectors
+            try {
+                Selectors.switchSelectors = true;
+                logger.info(tag, 'Trying to load second selectors set');
+                logger.debug(tag, `Evaluating selectors`, [Selectors.container]);
+                await page.waitForSelector(Selectors.container, { timeout: 3000 });
+            }
+            catch(err) {
+                logger.info(tag, 'Failed to load container selector, skip');
+                return { exit: false };
+            }
         }
+
+        logger.info(tag, 'OK');
 
         let jobIndex = 0;
 
@@ -222,7 +278,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
             // Get number of all job links in the page
             let jobLinksTot = await page.evaluate(
                 (linksSelector: string) => document.querySelectorAll(linksSelector).length,
-                selectors.links
+                Selectors.links
             );
 
             if (jobLinksTot === 0) {
@@ -254,10 +310,10 @@ export class LoggedOutRunStrategy extends RunStrategy {
                 try {
                     // Extract job main fields
                     logger.debug(tag, `Evaluating selectors`, [
-                        selectors.links,
-                        selectors.companies,
-                        selectors.places,
-                        selectors.dates,
+                        Selectors.links,
+                        Selectors.companies,
+                        Selectors.places,
+                        Selectors.dates,
                     ]);
 
                     [jobId, jobTitle, jobCompany, jobPlace, jobDate] = await page.evaluate(
@@ -269,9 +325,20 @@ export class LoggedOutRunStrategy extends RunStrategy {
                             datesSelector: string,
                             jobIndex: number
                         ) => {
+                            let jobId: string | null = '';
+
+                            // Try first set of selectors
+                            jobId = document.querySelectorAll(jobsSelector)[jobIndex].getAttribute('data-id');
+
+                            // If failed, try second set of selectors
+                            if (!jobId) {
+                                jobId = (<HTMLElement>document.querySelectorAll(linksSelector)[jobIndex])
+                                    .parentElement!.getAttribute('data-entity-urn')!
+                                    .split(':').splice(-1)[0];
+                            }
+
                             return [
-                                (<HTMLElement>document.querySelectorAll(jobsSelector)[jobIndex])
-                                    .getAttribute("data-id"),
+                                jobId,
                                 (<HTMLElement>document.querySelectorAll(linksSelector)[jobIndex]).innerText,
                                 (<HTMLElement>document.querySelectorAll(companiesSelector)[jobIndex]).innerText,
                                 (<HTMLElement>document.querySelectorAll(placesSelector)[jobIndex]).innerText,
@@ -279,17 +346,17 @@ export class LoggedOutRunStrategy extends RunStrategy {
                                     .getAttribute('datetime')
                             ];
                         },
-                        selectors.jobs,
-                        selectors.links,
-                        selectors.companies,
-                        selectors.places,
-                        selectors.dates,
+                        Selectors.jobs,
+                        Selectors.links,
+                        Selectors.companies,
+                        Selectors.places,
+                        Selectors.dates,
                         jobIndex
                     );
 
                     // Load job details and extract job link
                     logger.debug(tag, `Evaluating selectors`, [
-                        selectors.links,
+                        Selectors.links,
                     ]);
 
                     [jobLink, loadJobDetailsResult] = await Promise.all([
@@ -299,7 +366,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
                                 linkElem.click();
                                 return linkElem.getAttribute("href");
                             },
-                            selectors.links,
+                            Selectors.links,
                             jobIndex
                         ),
 
@@ -316,7 +383,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
 
                     // Use custom description function if available
                     logger.debug(tag, `Evaluating selectors`, [
-                        selectors.description
+                        Selectors.description
                     ]);
 
                     if (query.options?.descriptionFn) {
@@ -324,7 +391,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
                             page.evaluate(`(${query.options.descriptionFn.toString()})();`),
                             page.evaluate((selector) => {
                                 return (<HTMLElement>document.querySelector(selector)).outerHTML;
-                            }, selectors.description)
+                            }, Selectors.description)
                         ]);
                     }
                     else {
@@ -332,23 +399,23 @@ export class LoggedOutRunStrategy extends RunStrategy {
                                 const el = (<HTMLElement>document.querySelector(selector));
                                 return [el.innerText, el.outerHTML];
                             },
-                            selectors.description
+                            Selectors.description
                         );
                     }
 
                     // Extract apply link
                     logger.debug(tag, `Evaluating selectors`, [
-                        selectors.applyLink
+                        Selectors.applyLink
                     ]);
 
                     jobApplyLink = await page.evaluate((selector) => {
                         const applyBtn = document.querySelector<HTMLElement>(selector);
                         return applyBtn ? applyBtn.getAttribute("href") : null;
-                    }, selectors.applyLink);
+                    }, Selectors.applyLink);
 
                     // Extract other job fields
                     logger.debug(tag, `Evaluating selectors`, [
-                        selectors.criteria
+                        Selectors.criteria
                     ]);
 
                     [
@@ -381,7 +448,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
                                 .map(spanList => Array.from(spanList as Array<HTMLElement>)
                                     .map(e => e.innerText).join(', '));
                         },
-                        selectors.criteria
+                        Selectors.criteria
                     );
                 }
                 catch(err) {
@@ -419,7 +486,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
                     logger.info(tag, 'Fecthing new jobs');
                     jobLinksTot = await page.evaluate(
                         (linksSelector) => document.querySelectorAll(linksSelector).length,
-                        selectors.links
+                        Selectors.links
                     );
                 }
             }

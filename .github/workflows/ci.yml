@@ -20,13 +20,14 @@ jobs:
         run: npm run build
 
       - name: Test
+        if: ${{ env.TEST != 'skip' }}
         run: npm run test-logged-in
         env:
           DEBUG: scraper:*
           LI_AT_COOKIE: ${{ secrets.LI_AT_COOKIE }}
 
       - name: Publish-Latest
-        if: contains(github.ref, 'release') # Tag commit with 'release' to publish
+#        if: contains(github.ref, 'release') # Tag commit with 'release' to publish
         run: |
           npm set registry "https://registry.npmjs.org"
           npm set //registry.npmjs.org/:_authToken ${{ secrets.NPM_PUBLISH_TOKEN }}

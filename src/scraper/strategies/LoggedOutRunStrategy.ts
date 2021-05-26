@@ -171,7 +171,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
                     window.scrollTo(0, document.body.scrollHeight);
                     return document.querySelectorAll(selector).length > jobLinksTot;
                 },
-                Selectors.links,
+                Selectors.jobs,
                 jobLinksTot
             );
 
@@ -276,20 +276,20 @@ export class LoggedOutRunStrategy extends RunStrategy {
             await LoggedOutRunStrategy._acceptCookies(page, tag);
 
             // Get number of all job links in the page
-            let jobLinksTot = await page.evaluate(
-                (linksSelector: string) => document.querySelectorAll(linksSelector).length,
-                Selectors.links
+            let jobsTot = await page.evaluate(
+                (selector) => document.querySelectorAll(selector).length,
+                Selectors.jobs
             );
 
-            if (jobLinksTot === 0) {
+            if (jobsTot === 0) {
                 logger.info(tag, `No jobs found, skip`);
                 break;
             }
 
-            logger.info(tag, "Jobs fetched: " + jobLinksTot);
+            logger.info(tag, "Jobs fetched: " + jobsTot);
 
             // Jobs loop
-            while (jobIndex < jobLinksTot && processed < query.options!.limit!) {
+            while (jobIndex < jobsTot && processed < query.options!.limit!) {
                 tag = `[${query.query}][${location}][${processed + 1}]`;
 
                 let jobId;
@@ -310,13 +310,14 @@ export class LoggedOutRunStrategy extends RunStrategy {
                 try {
                     // Extract job main fields
                     logger.debug(tag, `Evaluating selectors`, [
+                        Selectors.jobs,
                         Selectors.links,
                         Selectors.companies,
                         Selectors.places,
                         Selectors.dates,
                     ]);
 
-                    [jobId, jobTitle, jobCompany, jobPlace, jobDate] = await page.evaluate(
+                    [jobId, jobLink, jobTitle, jobCompany, jobPlace, jobDate] = await page.evaluate(
                         (
                             jobsSelector: string,
                             linksSelector: string,
@@ -325,25 +326,33 @@ export class LoggedOutRunStrategy extends RunStrategy {
                             datesSelector: string,
                             jobIndex: number
                         ) => {
+                            const job = document.querySelectorAll(jobsSelector)[jobIndex];
+                            const link = job.querySelector(linksSelector) as HTMLElement;
+
+                            // Click job link and scroll
+                            link.scrollIntoView();
+                            link.click();
+                            const linkUrl = link.getAttribute("href");
+
                             let jobId: string | null = '';
 
                             // Try first set of selectors
-                            jobId = document.querySelectorAll(jobsSelector)[jobIndex].getAttribute('data-id');
+                            jobId = job.getAttribute('data-id');
 
                             // If failed, try second set of selectors
                             if (!jobId) {
-                                jobId = (<HTMLElement>document.querySelectorAll(linksSelector)[jobIndex])
+                                jobId = (<HTMLElement>job.querySelector(linksSelector))
                                     .parentElement!.getAttribute('data-entity-urn')!
                                     .split(':').splice(-1)[0];
                             }
 
                             return [
                                 jobId,
-                                (<HTMLElement>document.querySelectorAll(linksSelector)[jobIndex]).innerText,
-                                (<HTMLElement>document.querySelectorAll(companiesSelector)[jobIndex]).innerText,
-                                (<HTMLElement>document.querySelectorAll(placesSelector)[jobIndex]).innerText,
-                                (<HTMLElement>document.querySelectorAll(datesSelector)[jobIndex])
-                                    .getAttribute('datetime')
+                                linkUrl,
+                                (<HTMLElement>job.querySelector(linksSelector)).innerText,
+                                (<HTMLElement>job.querySelector(companiesSelector)).innerText,
+                                (<HTMLElement>job.querySelector(placesSelector)).innerText,
+                                (<HTMLElement>job.querySelector(datesSelector)).getAttribute('datetime')
                             ];
                         },
                         Selectors.jobs,
@@ -359,19 +368,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
                         Selectors.links,
                     ]);
 
-                    [jobLink, loadJobDetailsResult] = await Promise.all([
-                        page.evaluate((linksSelector: string, jobIndex: number) => {
-                                const linkElem = <HTMLElement>document.querySelectorAll(linksSelector)[jobIndex];
-                                linkElem.scrollIntoView();
-                                linkElem.click();
-                                return linkElem.getAttribute("href");
-                            },
-                            Selectors.links,
-                            jobIndex
-                        ),
-
-                        LoggedOutRunStrategy._loadJobDetails(page, jobId!),
-                    ]);
+                    loadJobDetailsResult = await LoggedOutRunStrategy._loadJobDetails(page, jobId!);
 
                     // Check if loading job details has failed
                     if (!loadJobDetailsResult.success) {
@@ -482,11 +479,11 @@ export class LoggedOutRunStrategy extends RunStrategy {
                 processed += 1;
                 logger.info(tag, `Processed`);
 
-                if (processed < query.options!.limit! && jobIndex === jobLinksTot) {
+                if (processed < query.options!.limit! && jobIndex === jobsTot) {
                     logger.info(tag, 'Fecthing new jobs');
-                    jobLinksTot = await page.evaluate(
-                        (linksSelector) => document.querySelectorAll(linksSelector).length,
-                        Selectors.links
+                    jobsTot = await page.evaluate(
+                        (selector) => document.querySelectorAll(selector).length,
+                        Selectors.jobs
                     );
                 }
             }
@@ -499,7 +496,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
 
             const loadMoreJobsResult = await LoggedOutRunStrategy._loadMoreJobs(
                 page,
-                jobLinksTot
+                jobsTot
             );
 
             // Check if loading jobs has failed

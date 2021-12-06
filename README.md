@@ -102,7 +102,7 @@ const {
             {
                 query: "Engineer",
                 options: {
-                    locations: ["United States"], // This will be merged with the global options => ["United States", "Europe"]
+                    locations: ["United States"], // This will override global options ["Europe"]
                     filters: {
                         type: [typeFilter.FULL_TIME, typeFilter.CONTRACT]    
                     },       
@@ -114,7 +114,7 @@ const {
                     limit: 10, // This will override global option limit (33)
                 }
             },
-        ], { // Global options for this run, will be merged individually with each query options (if any)
+        ], { // Global options, will be merged individually with each query options
             locations: ["Europe"],
             optimize: true,
             limit: 33,
@@ -223,6 +223,9 @@ enableLoggerError() { }
 ```
 
 ## Anonymous vs authenticated session
+**⚠ WARNING: due to lack of time, anonymous session strategy is no longer maintained. If someone wants to keep
+support for this feature and become a project maintainer, please be free to pm me.**
+
 By default the scraper will run in anonymous mode (no authentication required). In some environments (e.g. AWS or Heroku) 
 this may be not possible though. You may face the following error message:
 

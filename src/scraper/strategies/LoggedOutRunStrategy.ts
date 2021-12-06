@@ -228,6 +228,8 @@ export class LoggedOutRunStrategy extends RunStrategy {
         query: IQuery,
         location: string,
     ): Promise<IRunStrategyResult> => {
+        console.warn("Anonymous session strategy is no longer maintained and it won't probably work. It is recommended to use an authenticated session, see documentation at https://github.com/spinlud/linkedin-jobs-scraper#anonymous-vs-authenticated-session.");
+
         let tag = `[${query.query}][${location}]`;
         let processed = 0;
 

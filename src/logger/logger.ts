@@ -39,6 +39,8 @@ logger.info.log = console.log.bind(console);
 
 if (!process.env.DEBUG) {
     logger.enableInfo();
+    logger.enableWarn();
+    logger.enableError();
 }
 
 export { logger };

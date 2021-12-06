@@ -111,7 +111,7 @@ export class LoggedInRunStrategy extends RunStrategy {
         try {
             await page.waitForSelector(selectors.paginationNextBtn, {timeout: timeout});
         }
-        catch(err) {
+        catch(err: any) {
             return {
                 success: false,
                 error: `There are no more pages to visit`
@@ -258,7 +258,7 @@ export class LoggedInRunStrategy extends RunStrategy {
         try {
             await page.waitForSelector(selectors.container, { timeout: 5000 });
         }
-        catch(err) {
+        catch(err: any) {
             logger.info(tag, `No jobs found, skip`);
             return { exit: false };
         }
@@ -469,7 +469,7 @@ export class LoggedInRunStrategy extends RunStrategy {
                         selectors.criteria
                     );
                 }
-                catch(err) {
+                catch(err: any) {
                     const errorMessage = `${tag}\t${err.message}`;
                     this.scraper.emit(events.scraper.error, errorMessage);
                     jobIndex++;

@@ -105,7 +105,7 @@ export const validateQuery = (query: IQuery): IQueryValidationError[] => {
                         });
                     }
                 }
-                catch(err) {
+                catch(err: any) {
                     errors.push({
                         param: "options.filters.companyJobsUrl",
                         reason: `Must be a valid url`

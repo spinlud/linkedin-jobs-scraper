@@ -253,7 +253,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
             logger.debug(tag, `Evaluating selectors`, [Selectors.container]);
             await page.waitForSelector(Selectors.container, { timeout: 3000 });
         }
-        catch(err) {
+        catch(err: any) {
             // Try to load second set of selectors
             try {
                 Selectors.switchSelectors = true;
@@ -261,7 +261,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
                 logger.debug(tag, `Evaluating selectors`, [Selectors.container]);
                 await page.waitForSelector(Selectors.container, { timeout: 3000 });
             }
-            catch(err) {
+            catch(err: any) {
                 logger.info(tag, 'Failed to load container selector, skip');
                 return { exit: false };
             }
@@ -448,7 +448,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
                         Selectors.criteria
                     );
                 }
-                catch(err) {
+                catch(err: any) {
                     const errorMessage = `${tag}\t${err.message}`;
                     this.scraper.emit(events.scraper.error, errorMessage);
                     jobIndex += 1;

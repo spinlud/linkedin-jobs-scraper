@@ -1,6 +1,6 @@
 {
   "name": "linkedin-jobs-scraper",
-  "version": "8.0.2",
+  "version": "9.0.0",
   "description": "Scrape public available jobs on Linkedin using headless browser",
   "main": "build/index.js",
   "types": "build/index.d.ts",
@@ -21,11 +21,11 @@
   "author": "Ludovico Fabbri",
   "license": "ISC",
   "dependencies": {
-    "debug": "^4.3.1",
+    "debug": "^4.3.3",
     "deepmerge": "^4.2.2",
-    "puppeteer": "^10.1.0",
-    "puppeteer-extra": "^3.1.18",
-    "puppeteer-extra-plugin-stealth": "^2.7.8",
+    "puppeteer": "^12.0.1",
+    "puppeteer-extra": "^3.2.3",
+    "puppeteer-extra-plugin-stealth": "^2.9.0",
     "random-useragent": "^0.5.0"
   },
   "keywords": [
@@ -44,13 +44,13 @@
     "selenium"
   ],
   "devDependencies": {
-    "@types/debug": "^4.1.5",
-    "@types/jest": "^26.0.23",
-    "@types/node": "^15.12.5",
-    "jest": "^27.0.6",
-    "ts-jest": "^27.0.3",
-    "ts-node": "^10.0.0",
-    "typed-emitter": "^1.3.1",
-    "typescript": "^4.3.5"
+    "@types/debug": "^4.1.7",
+    "@types/jest": "^27.0.3",
+    "@types/node": "^16.11.11",
+    "jest": "^27.4.3",
+    "ts-jest": "^27.1.0",
+    "ts-node": "^10.4.0",
+    "typed-emitter": "^1.4.0",
+    "typescript": "^4.5.2"
   }
 }

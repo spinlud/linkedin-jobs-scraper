@@ -52,10 +52,13 @@ describe('[TEST]', () => {
 
     const queriesSerial1: IQuery[] = [
         {
+            query: '',
+        },
+        {
             query: "c#",
             options: {
                 locations: ['Finland'],
-                limit: 50,
+                limit: 33,
                 filters: {
                     time: timeFilter.WEEK,
                     experience: experienceLevelFilter.MID_SENIOR,
@@ -76,6 +79,8 @@ describe('[TEST]', () => {
 
     const globalOptions: IQueryOptions = {
         optimize: false,
+        limit: 10,
+        locations: ['United Kingdom'],
         filters: {
             time: timeFilter.MONTH,
             relevance: relevanceFilter.RECENT,

@@ -33,12 +33,6 @@ const browserDefaults: ScraperOptions = {
     slowMo: 150,
 };
 
-
-
-
-
-
-
 const queryOptionsDefault: IQueryOptions = {
     locations: [],
     limit: 25,

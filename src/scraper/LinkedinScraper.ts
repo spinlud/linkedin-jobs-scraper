@@ -163,7 +163,9 @@ class LinkedinScraper extends Scraper {
             const optionsToMerge = [queryOptionsDefault];
             options && optionsToMerge.push(options);
             query.options && optionsToMerge.push(query.options);
-            query.options = deepmerge.all(optionsToMerge);
+            query.options = deepmerge.all(optionsToMerge, {
+                arrayMerge: (destinationArray, sourceArray, options) => sourceArray,
+            });
 
             // Add default location if none provided
             if (!query?.options?.locations?.length) {

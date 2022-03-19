@@ -11,7 +11,7 @@ import { urls, } from './constants';
 import { IQuery, IQueryOptions, validateQuery } from './query';
 import { getRandomUserAgent } from '../utils/browser';
 import { Scraper, ScraperOptions } from './Scraper';
-import { RunStrategy, LoggedInRunStrategy, LoggedOutRunStrategy } from './strategies';
+import { RunStrategy, AuthenticatedStrategy, AnonymousStrategy } from './strategies';
 import { logger } from '../logger/logger';
 
 puppeteer.use(require('puppeteer-extra-plugin-stealth')());
@@ -36,12 +36,12 @@ class LinkedinScraper extends Scraper {
         super(options);
 
         if (config.LI_AT_COOKIE) {
-            this._runStrategy = new LoggedInRunStrategy(this);
-            logger.info(`Env variable LI_AT_COOKIE detected. Using ${LoggedInRunStrategy.name}`)
+            this._runStrategy = new AuthenticatedStrategy(this);
+            logger.info(`Env variable LI_AT_COOKIE detected. Using ${AuthenticatedStrategy.name}`)
         }
         else {
-            this._runStrategy = new LoggedOutRunStrategy(this);
-            logger.info(`Using ${LoggedOutRunStrategy.name}`)
+            this._runStrategy = new AnonymousStrategy(this);
+            logger.info(`Using ${AnonymousStrategy.name}`)
         }
     }
 

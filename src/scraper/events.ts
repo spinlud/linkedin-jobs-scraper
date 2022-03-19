@@ -1,3 +1,5 @@
+import { EventMap } from 'typed-emitter';
+
 type BrowserEvent = "disconnected" | "targetchanged" | "targetcreated" | "targetdestroyed";
 
 export interface IData {
@@ -53,7 +55,18 @@ const events: IEvents = {
     },
 };
 
-export interface IEventListeners {
+// export interface IEventListeners extends EventMap {
+//     ["scraper:data"]: (data: IData) => void;
+//     ["scraper:error"]: (error: Error | string) => void;
+//     ["scraper:invalid-session"]: () => void;
+//     ["scraper:end"]: () => void;
+//     ["disconnected"]: (...args: any[]) => void;
+//     ["targetchanged"]: (...args: any[]) => void;
+//     ["targetcreated"]: (...args: any[]) => void;
+//     ["targetdestroyed"]: (...args: any[]) => void;
+// }
+
+export type IEventListeners = {
     ["scraper:data"]: (data: IData) => void;
     ["scraper:error"]: (error: Error | string) => void;
     ["scraper:invalid-session"]: () => void;

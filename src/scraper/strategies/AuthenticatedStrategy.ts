@@ -8,7 +8,7 @@ import { logger } from "../../logger/logger";
 import { urls } from "../constants";
 
 export const selectors = {
-    container: '.jobs-search-two-pane__container',
+    container: '.jobs-search-two-pane__results',
     chatPanel: '.msg-overlay-list-bubble',
     jobs: 'div.job-card-container',
     links: 'a.job-card-container__link',
@@ -20,6 +20,7 @@ export const selectors = {
     detailsPanel: '.jobs-search__job-details--container',
     detailsTop: '.jobs-details-top-card',
     details: '.jobs-details__main-content',
+    insights: '[class=jobs-unified-top-card__job-insight]', // only one class
     criteria: '.jobs-box__group h3',
     pagination: '.jobs-search-two-pane__pagination',
     paginationNextBtn: 'li[data-test-pagination-page-btn].selected + li',
@@ -27,10 +28,10 @@ export const selectors = {
 };
 
 /**
- * @class LoggedInRunStrategy
+ * @class AuthenticatedStrategy
  * @extends RunStrategy
  */
-export class LoggedInRunStrategy extends RunStrategy {
+export class AuthenticatedStrategy extends RunStrategy {
 
     /**
      * Check if session is authenticated
@@ -96,8 +97,9 @@ export class LoggedInRunStrategy extends RunStrategy {
     /**
      * Try to paginate
      * @param {Page} page
-     * @param {number} timeout
      * @param {string} tag
+     * @param {string} paginationSize
+     * @param {number} timeout
      * @returns {Promise<ILoadResult>}
      * @static
      * @private
@@ -105,29 +107,20 @@ export class LoggedInRunStrategy extends RunStrategy {
     private static _paginate = async (
         page: Page,
         tag: string,
+        paginationSize: number = 25,
         timeout: number = 2000,
     ): Promise<ILoadResult> => {
-        // Check if there is a new page to load
-        try {
-            await page.waitForSelector(selectors.paginationNextBtn, {timeout: timeout});
-        }
-        catch(err: any) {
-            return {
-                success: false,
-                error: `There are no more pages to visit`
-            };
-        }
-
         const url = new URL(page.url());
 
         // Extract offset from url
         let offset = parseInt(url.searchParams.get('start') || "0", 10);
-        offset += 25;
+        offset += paginationSize;
 
         // Update offset in url
         url.searchParams.set('start', '' + offset);
 
-        logger.debug(tag, "Opening", url.toString());
+        logger.info(tag, 'Next offset: ', offset);
+        logger.info(tag, 'Opening', url.toString());
 
         // Navigate new url
         await page.goto(url.toString(), {
@@ -137,6 +130,8 @@ export class LoggedInRunStrategy extends RunStrategy {
         const pollingTime = 100;
         let elapsed = 0;
         let loaded = false;
+
+        logger.info(tag, 'Waiting for new jobs to load');
 
         // Wait for new jobs to load
         while (!loaded) {
@@ -249,7 +244,7 @@ export class LoggedInRunStrategy extends RunStrategy {
         });
 
         // Verify session
-        if (!(await LoggedInRunStrategy._isAuthenticatedSession(page))) {
+        if (!(await AuthenticatedStrategy._isAuthenticatedSession(page))) {
             logger.error("The provided session cookie is invalid. Check the documentation on how to obtain a valid session cookie.");
             this.scraper.emit(events.scraper.invalidSession);
             return { exit: true };
@@ -266,7 +261,7 @@ export class LoggedInRunStrategy extends RunStrategy {
         // Pagination loop
         while (processed < query.options!.limit!) {
             // Verify session in the loop
-            if (!(await LoggedInRunStrategy._isAuthenticatedSession(page))) {
+            if (!(await AuthenticatedStrategy._isAuthenticatedSession(page))) {
                 logger.warn(tag, "Session is invalid, this may cause the scraper to fail.");
                 this.scraper.emit(events.scraper.invalidSession);
             }
@@ -275,10 +270,10 @@ export class LoggedInRunStrategy extends RunStrategy {
             }
 
             // Try to hide chat panel
-            await LoggedInRunStrategy._hideChatPanel(page, tag);
+            await AuthenticatedStrategy._hideChatPanel(page, tag);
 
             // Accept cookies
-            await LoggedInRunStrategy._acceptCookies(page, tag);
+            await AuthenticatedStrategy._acceptCookies(page, tag);
 
             let jobIndex = 0;
 
@@ -382,7 +377,7 @@ export class LoggedInRunStrategy extends RunStrategy {
                         selectors.jobs,
                     ]);
 
-                    loadDetailsResult = await LoggedInRunStrategy._loadJobDetails(page, jobId!);
+                    loadDetailsResult = await AuthenticatedStrategy._loadJobDetails(page, jobId!);
 
                     // Check if loading job details has failed
                     if (!loadDetailsResult.success) {
@@ -521,8 +516,7 @@ export class LoggedInRunStrategy extends RunStrategy {
             // Try pagination to load more jobs
             paginationIndex += 1;
             logger.info(tag, `Pagination requested (${paginationIndex})`);
-            // const paginationResult = await LoggedInRunStrategy._paginate(page, paginationIndex);
-            const paginationResult = await LoggedInRunStrategy._paginate(page, tag);
+            const paginationResult = await AuthenticatedStrategy._paginate(page, tag);
 
             // Check if loading jobs has failed
             if (!paginationResult.success) {

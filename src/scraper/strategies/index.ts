@@ -1,3 +1,3 @@
 export { RunStrategy } from "./RunStrategy";
-export { LoggedInRunStrategy } from "./LoggedInRunStrategy";
-export { LoggedOutRunStrategy } from "./LoggedOutRunStrategy";
+export { AuthenticatedStrategy } from "./AuthenticatedStrategy";
+export { AnonymousStrategy } from "./AnonymousStrategy";

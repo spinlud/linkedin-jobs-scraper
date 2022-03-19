@@ -60,10 +60,10 @@ export class Selectors {
 }
 
 /**
- * @class LoggedOutRunStrategy
+ * @class AnonymousStrategy
  * @extends RunStrategy
  */
-export class LoggedOutRunStrategy extends RunStrategy {
+export class AnonymousStrategy extends RunStrategy {
 
     /**
      * Verify if authentication is required
@@ -240,7 +240,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
         });
 
         // Verify if authentication is required
-        if ((await LoggedOutRunStrategy._needsAuthentication(page))) {
+        if ((await AnonymousStrategy._needsAuthentication(page))) {
             logger.error(tag, "Scraper failed to run in anonymous mode, authentication may be necessary for this environment. Please check the documentation on how to use an authenticated session.")
             return { exit: true };
         }
@@ -275,7 +275,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
 
         // Pagination loop
         while (processed < query.options!.limit!) {
-            await LoggedOutRunStrategy._acceptCookies(page, tag);
+            await AnonymousStrategy._acceptCookies(page, tag);
 
             // Get number of all job links in the page
             let jobsTot = await page.evaluate(
@@ -370,7 +370,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
                         Selectors.links,
                     ]);
 
-                    loadJobDetailsResult = await LoggedOutRunStrategy._loadJobDetails(page, jobId!);
+                    loadJobDetailsResult = await AnonymousStrategy._loadJobDetails(page, jobId!);
 
                     // Check if loading job details has failed
                     if (!loadJobDetailsResult.success) {
@@ -496,7 +496,7 @@ export class LoggedOutRunStrategy extends RunStrategy {
             // Check if there are more jobs to load
             logger.info(tag, "Checking for new jobs to load...");
 
-            const loadMoreJobsResult = await LoggedOutRunStrategy._loadMoreJobs(
+            const loadMoreJobsResult = await AnonymousStrategy._loadMoreJobs(
                 page,
                 jobsTot
             );

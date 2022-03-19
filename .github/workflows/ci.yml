@@ -21,7 +21,7 @@ jobs:
 
       - name: Test
         if: ${{ env.TEST != 'skip' }}
-        run: npm run test-logged-in
+        run: npm run test-authenticated
         env:
           DEBUG: scraper:*
           LI_AT_COOKIE: ${{ secrets.LI_AT_COOKIE }}

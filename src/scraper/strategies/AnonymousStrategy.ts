@@ -475,6 +475,7 @@ export class AnonymousStrategy extends RunStrategy {
                     jobFunction: jobFunction,
                     employmentType: jobEmploymentType,
                     industries: jobIndustries,
+                    insights: [],
                 });
 
                 jobIndex += 1;

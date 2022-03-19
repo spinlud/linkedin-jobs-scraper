@@ -307,6 +307,7 @@ export class AuthenticatedStrategy extends RunStrategy {
                 let jobEmploymentType;
                 let jobIndustry;
                 let loadDetailsResult;
+                let jobInsights;
 
                 try {
                     // Extract job main fields
@@ -410,10 +411,21 @@ export class AuthenticatedStrategy extends RunStrategy {
 
                     jobDescription = jobDescription as string;
 
+                    // Extract job insights
+                    logger.debug(tag, 'Evaluating selectors', [
+                        selectors.insights,
+                    ]);
+
                     // Extract job criteria
                     logger.debug(tag, 'Evaluating selectors', [
                         selectors.criteria,
                     ]);
+
+                    jobInsights = await page.evaluate((jobInsightsSelector: string) => {
+                        const nodes = document.querySelectorAll(jobInsightsSelector);
+                        return Array.from(nodes).map(e => e.textContent!
+                            .replace(/[\n\r\t ]+/g, ' ').trim());
+                    }, selectors.insights);
 
                     [
                         jobSenorityLevel,
@@ -488,6 +500,7 @@ export class AuthenticatedStrategy extends RunStrategy {
                     jobFunction: jobFunction,
                     employmentType: jobEmploymentType,
                     industries: jobIndustry,
+                    insights: jobInsights,
                 });
 
                 jobIndex += 1;

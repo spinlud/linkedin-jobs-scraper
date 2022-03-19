@@ -19,6 +19,7 @@ export interface IData {
     jobFunction: string;
     employmentType: string;
     industries: string;
+    insights: string[];
 }
 
 interface IEvents {

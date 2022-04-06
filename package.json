@@ -1,6 +1,6 @@
 {
   "name": "linkedin-jobs-scraper",
-  "version": "10.1.1",
+  "version": "10.1.2",
   "description": "Scrape public available jobs on Linkedin using headless browser",
   "main": "build/index.js",
   "types": "build/index.d.ts",
@@ -19,11 +19,11 @@
   },
   "homepage": "https://github.com/spinlud/linkedin-jobs-scraper.git#readme",
   "author": "Ludovico Fabbri",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "debug": "^4.3.4",
     "deepmerge": "^4.2.2",
-    "puppeteer": "^13.5.1",
+    "puppeteer": "^13.5.2",
     "puppeteer-extra": "^3.2.3",
     "puppeteer-extra-plugin-stealth": "^2.9.0",
     "random-useragent": "^0.5.0"

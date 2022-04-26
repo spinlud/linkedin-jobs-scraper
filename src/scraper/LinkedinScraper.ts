@@ -1,6 +1,6 @@
 import deepmerge from 'deepmerge';
 import { config } from '../config';
-import puppeteer from 'puppeteer-extra';
+import puppeteer from 'puppeteer';
 import { Browser, BrowserContext, HTTPRequest } from 'puppeteer';
 import { events, IEventListeners } from './events';
 import { states } from './states';
@@ -14,7 +14,7 @@ import { Scraper, ScraperOptions } from './Scraper';
 import { RunStrategy, AuthenticatedStrategy, AnonymousStrategy } from './strategies';
 import { logger } from '../logger/logger';
 
-puppeteer.use(require('puppeteer-extra-plugin-stealth')());
+// puppeteer.use(require('puppeteer-extra-plugin-stealth')()); // TODO: breaks with new target tabs: to investigate
 
 /**
  * Main class
@@ -269,7 +269,7 @@ class LinkedinScraper extends Scraper {
                 const searchUrl = this._buildSearchUrl(query.query || "", location, query.options!);
 
                 // Run strategy
-                const runStrategyResult = await this._runStrategy.run(page, searchUrl, query, location);
+                const runStrategyResult = await this._runStrategy.run(this._context!, page, searchUrl, query, location);
 
                 // Check if forced exit is required
                 if (runStrategyResult.exit) {

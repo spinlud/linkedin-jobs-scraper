@@ -1,7 +1,19 @@
 # linkedin-jobs-scraper
 > Scrape public available jobs on Linkedin using headless browser. 
-> For each job, the following fields are extracted: `jobId`, `title`, `[company]`, `place`, `date`, `link`, `[applyLink]`,
-> `description`, `descriptionHTML`, `senorityLevel`, `jobFunction`, `employmentType`, `industries`, `insights`. <br><br>
+> For each job, the following fields are extracted: `jobId`, 
+> `title`, 
+> `[company]`, 
+> `place`, 
+> `date`, 
+> `link`, 
+> `[applyLink]`,
+> `description`, 
+> `descriptionHTML`, 
+> `senorityLevel`, 
+> `jobFunction`, 
+> `employmentType`, 
+> `industries`, 
+> `insights`. <br><br>
 > It's also available an equivalent [package in python](https://github.com/spinlud/py-linkedin-jobs-scraper).
 
 ## Table of Contents
@@ -113,6 +125,7 @@ const {
                 query: "Sales",
                 options: {                    
                     limit: 10, // This will override global option limit (33)
+                    applyLink: true, // Try to extract apply link (slower). Default to false
                 }
             },
         ], { // Global options, will be merged individually with each query options

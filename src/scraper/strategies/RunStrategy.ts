@@ -1,4 +1,4 @@
-import { Page } from "puppeteer";
+import { BrowserContext, Page } from "puppeteer";
 import { Scraper } from "../Scraper";
 import { IQuery } from "../query";
 
@@ -14,6 +14,7 @@ export abstract class RunStrategy {
     }
 
     abstract run(
+        browser: BrowserContext,
         page: Page,
         url: string,
         query: IQuery,

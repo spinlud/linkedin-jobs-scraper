@@ -37,6 +37,7 @@ const queryOptionsDefault: IQueryOptions = {
     locations: [],
     limit: 25,
     optimize: true,
+    applyLink: false,
 };
 
 export { browserDefaults, queryOptionsDefault };

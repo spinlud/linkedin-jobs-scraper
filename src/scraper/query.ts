@@ -25,6 +25,7 @@ export interface IQueryOptions {
     },
     descriptionFn?: () => string;
     optimize?: boolean;
+    applyLink?: boolean;
 }
 
 export interface IQueryValidationError {

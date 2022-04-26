@@ -1,6 +1,6 @@
 import { config } from "../../config";
 import { RunStrategy, IRunStrategyResult, ILoadResult } from "./RunStrategy";
-import { Page } from "puppeteer";
+import { BrowserContext, Page } from "puppeteer";
 import { events } from "../events";
 import { sleep } from "../../utils/utils";
 import { IQuery } from "../query";
@@ -11,11 +11,12 @@ export const selectors = {
     container: '.jobs-search-two-pane__results',
     chatPanel: '.msg-overlay-list-bubble',
     jobs: 'div.job-card-container',
-    links: 'a.job-card-container__link',
+    link: 'a.job-card-container__link',
+    applyBtn: 'button.jobs-apply-button[role="link"]',
     title: '.artdeco-entity-lockup__title',
-    companies: '.artdeco-entity-lockup__subtitle',
-    places: '.artdeco-entity-lockup__caption',
-    dates: 'time',
+    company: '.artdeco-entity-lockup__subtitle',
+    place: '.artdeco-entity-lockup__caption',
+    date: 'time',
     description: '.jobs-description',
     detailsPanel: '.jobs-search__job-details--container',
     detailsTop: '.jobs-details-top-card',
@@ -213,6 +214,7 @@ export class AuthenticatedStrategy extends RunStrategy {
      * @param location
      */
     public run = async (
+        browser: BrowserContext,
         page: Page,
         url: string,
         query: IQuery,
@@ -296,6 +298,7 @@ export class AuthenticatedStrategy extends RunStrategy {
 
                 let jobId;
                 let jobLink;
+                let jobApplyLink;
                 let jobTitle;
                 let jobCompany;
                 let jobPlace;
@@ -313,10 +316,10 @@ export class AuthenticatedStrategy extends RunStrategy {
                     // Extract job main fields
                     logger.debug(tag, 'Evaluating selectors', [
                         selectors.jobs,
-                        selectors.links,
-                        selectors.companies,
-                        selectors.places,
-                        selectors.dates,
+                        selectors.link,
+                        selectors.company,
+                        selectors.place,
+                        selectors.date,
                     ]);
 
                     [jobId, jobLink, jobTitle, jobCompany, jobPlace, jobDate] = await page.evaluate(
@@ -365,11 +368,11 @@ export class AuthenticatedStrategy extends RunStrategy {
                             ];
                         },
                         selectors.jobs,
-                        selectors.links,
+                        selectors.link,
                         selectors.title,
-                        selectors.companies,
-                        selectors.places,
-                        selectors.dates,
+                        selectors.company,
+                        selectors.place,
+                        selectors.date,
                         jobIndex
                     );
 
@@ -475,6 +478,30 @@ export class AuthenticatedStrategy extends RunStrategy {
                         },
                         selectors.criteria
                     );
+
+                    // Apply link
+                    if (query.options?.applyLink) {
+                        if (await page.evaluate((applyBtnSelector: string) => {
+                            const applyBtn = document.querySelector(applyBtnSelector) as HTMLButtonElement;
+
+                            if (applyBtn) {
+                                applyBtn.click();
+                                window.stop();
+                                return true;
+                            }
+
+                            return false;
+                        }, selectors.applyBtn)) {
+                            // Reference: https://github.com/puppeteer/puppeteer/issues/3718#issuecomment-451325093
+                            const newTarget = await browser.waitForTarget(target => target.opener() === page.target());
+                            const applyPage = await newTarget.page();
+
+                            if (applyPage) {
+                                jobApplyLink = applyPage.url();
+                                await applyPage.close();
+                            }
+                        }
+                    }
                 }
                 catch(err: any) {
                     const errorMessage = `${tag}\t${err.message}`;
@@ -490,6 +517,7 @@ export class AuthenticatedStrategy extends RunStrategy {
                     jobId: jobId!,
                     jobIndex: jobIndex,
                     link: jobLink!,
+                    applyLink: jobApplyLink,
                     title: jobTitle!,
                     company: jobCompany!,
                     place: jobPlace!,

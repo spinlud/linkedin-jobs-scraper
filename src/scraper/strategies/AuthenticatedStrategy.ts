@@ -15,6 +15,7 @@ export const selectors = {
     applyBtn: 'button.jobs-apply-button[role="link"]',
     title: '.artdeco-entity-lockup__title',
     company: '.artdeco-entity-lockup__subtitle',
+    companyLink: 'a.job-card-container__company-name',
     place: '.artdeco-entity-lockup__caption',
     date: 'time',
     description: '.jobs-description',
@@ -300,14 +301,12 @@ export class AuthenticatedStrategy extends RunStrategy {
                 let jobApplyLink;
                 let jobTitle;
                 let jobCompany;
+                let jobCompanyLink;
+                let jobCompanyImgLink;
                 let jobPlace;
                 let jobDescription;
                 let jobDescriptionHTML;
                 let jobDate;
-                let jobSenorityLevel;
-                let jobFunction;
-                let jobEmploymentType;
-                let jobIndustry;
                 let loadDetailsResult;
                 let jobInsights;
 
@@ -321,18 +320,18 @@ export class AuthenticatedStrategy extends RunStrategy {
                         selectors.date,
                     ]);
 
-                    [jobId, jobLink, jobTitle, jobCompany, jobPlace, jobDate] = await page.evaluate(
+                    const jobFieldsResult = await page.evaluate(
                         (
                             jobsSelector: string,
-                            linksSelector: string,
+                            linkSelector: string,
                             titleSelector: string,
-                            companiesSelector: string,
-                            placesSelector: string,
-                            datesSelector: string,
+                            companyLinkSelector: string,
+                            placeSelector: string,
+                            dateSelector: string,
                             jobIndex: number
                         ) => {
                             const job = document.querySelectorAll(jobsSelector)[jobIndex];
-                            const link = job.querySelector(linksSelector) as HTMLElement;
+                            const link = job.querySelector(linkSelector) as HTMLElement;
 
                             // Click job link and scroll
                             link.scrollIntoView();
@@ -341,39 +340,59 @@ export class AuthenticatedStrategy extends RunStrategy {
                             // Extract job link (relative)
                             const protocol = window.location.protocol + "//";
                             const hostname = window.location.hostname;
-                            const linkUrl = protocol + hostname + link.getAttribute("href");
+                            const jobLink = protocol + hostname + link.getAttribute("href");
 
                             const jobId = job.getAttribute("data-job-id");
 
                             const title = job.querySelector(titleSelector) ?
                                 (<HTMLElement>job.querySelector(titleSelector)).innerText : "";
 
-                            const company = job.querySelector(companiesSelector) ?
-                                (<HTMLElement>job.querySelector(companiesSelector)).innerText : "";
+                            let company = "";
+                            let companyLink = undefined;
 
-                            const place = job.querySelector(placesSelector) ?
-                                (<HTMLElement>job.querySelector(placesSelector)).innerText : "";
+                            if (job.querySelector(companyLinkSelector)) {
+                                const companyLinkElem = job.querySelector(companyLinkSelector) as HTMLElement;
+                                company = companyLinkElem.innerText.trim();
+                                companyLink = companyLinkElem.getAttribute("href") ?
+                                    `${protocol}${hostname}${companyLinkElem.getAttribute("href")}` : undefined;
+                            }
 
-                            const date = job.querySelector(datesSelector) ?
-                                (<HTMLElement>job.querySelector(datesSelector)).getAttribute('datetime') : "";
+                            const companyImgLink = (<HTMLElement>job.querySelector("img"))?.getAttribute("src") ?? undefined;
 
-                            return [
+                            const place = job.querySelector(placeSelector) ?
+                                (<HTMLElement>job.querySelector(placeSelector)).innerText : "";
+
+                            const date = job.querySelector(dateSelector) ?
+                                (<HTMLElement>job.querySelector(dateSelector)).getAttribute('datetime') : "";
+
+                            return {
                                 jobId,
-                                linkUrl,
+                                jobLink,
                                 title,
                                 company,
+                                companyLink,
+                                companyImgLink,
                                 place,
                                 date,
-                            ];
+                            };
                         },
                         selectors.jobs,
                         selectors.link,
                         selectors.title,
-                        selectors.company,
+                        selectors.companyLink,
                         selectors.place,
                         selectors.date,
                         jobIndex
                     );
+
+                    jobId = jobFieldsResult.jobId;
+                    jobLink = jobFieldsResult.jobLink;
+                    jobTitle = jobFieldsResult.title;
+                    jobCompany = jobFieldsResult.company;
+                    jobCompanyLink = jobFieldsResult.companyLink;
+                    jobCompanyImgLink = jobFieldsResult.companyImgLink;
+                    jobPlace = jobFieldsResult.place;
+                    jobDate = jobFieldsResult.date;
 
                     // Try to load job details and extract job link
                     logger.debug(tag, 'Evaluating selectors', [
@@ -465,6 +484,8 @@ export class AuthenticatedStrategy extends RunStrategy {
                     applyLink: jobApplyLink,
                     title: jobTitle!,
                     company: jobCompany!,
+                    companyLink: jobCompanyLink,
+                    companyImgLink: jobCompanyImgLink,
                     place: jobPlace!,
                     description: jobDescription! as string,
                     descriptionHTML: jobDescriptionHTML! as string,

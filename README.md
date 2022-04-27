@@ -2,7 +2,9 @@
 > Scrape public available jobs on Linkedin using headless browser. 
 > For each job, the following fields are extracted: `jobId`, 
 > `title`, 
-> `[company]`, 
+> `company`,
+> `[companyLink]`,
+> `[companyImgLink]`,
 > `place`, 
 > `date`, 
 > `link`, 
@@ -68,6 +70,8 @@ const {
             `Id='${data.jobId}'`,
             `Title='${data.title}'`,
             `Company='${data.company ? data.company : "N/A"}'`,
+            `CompanyLink='${data.companyLink ? data.companyLink : "N/A"}'`,
+            `CompanyImgLink='${data.companyImgLink ? data.companyImgLink : "N/A"}'`,
             `Place='${data.place}'`,
             `Date='${data.date}'`,
             `Link='${data.link}'`,
@@ -94,7 +98,7 @@ const {
     scraper.on(events.puppeteer.browser.disconnected, () => {
     });
 
-    // Custom function executed on browser side to extract job description
+    // Custom function executed on browser side to extract job description [optional]
     const descriptionFn = () => document.querySelector(".description__text")
         .innerText
         .replace(/[\s\n\r]+/g, " ")

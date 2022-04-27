@@ -36,6 +36,14 @@ describe('[TEST]', () => {
         if (data.applyLink) {
             expect(() => new URL(data.applyLink!)).not.toThrow();
         }
+
+        if (data.companyLink) {
+            expect(() => new URL(data.companyLink!)).not.toThrow();
+        }
+
+        if (data.companyImgLink) {
+            expect(() => new URL(data.companyImgLink!)).not.toThrow();
+        }
     };
 
     const onErrorFn = (err: Error | string) => {

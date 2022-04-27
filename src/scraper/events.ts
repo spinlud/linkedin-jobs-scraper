@@ -11,6 +11,8 @@ export interface IData {
     applyLink?: string;
     title: string;
     company: string;
+    companyLink?: string;
+    companyImgLink?: string;
     place: string;
     date: string;
     description: string;

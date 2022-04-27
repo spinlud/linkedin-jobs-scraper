@@ -49,11 +49,6 @@ export class Selectors {
         return '.description__text';
     }
 
-    static get criteria() {
-        return !this.switchSelectors ? 'li.job-criteria__item' :
-            '.description__job-criteria-item';
-    }
-
     static get seeMoreJobs() {
         return 'button.infinite-scroller__show-more-button';
     }
@@ -412,44 +407,6 @@ export class AnonymousStrategy extends RunStrategy {
                         const applyBtn = document.querySelector<HTMLElement>(selector);
                         return applyBtn ? applyBtn.getAttribute("href") : null;
                     }, Selectors.applyLink);
-
-                    // Extract other job fields
-                    logger.debug(tag, `Evaluating selectors`, [
-                        Selectors.criteria
-                    ]);
-
-                    [
-                        jobSenorityLevel,
-                        jobFunction,
-                        jobEmploymentType,
-                        jobIndustries,
-                    ] = await page.evaluate(
-                        (
-                            jobCriteriaSelector: string
-                        ) => {
-                            const items = document.querySelectorAll(jobCriteriaSelector);
-
-                            const criteria = [
-                                'Seniority level',
-                                'Job function',
-                                'Employment type',
-                                'Industries'
-                            ];
-
-                            const nodeList = criteria.map(criteria => {
-                                const el = Array.from(items)
-                                    .find(li =>
-                                        (<HTMLElement>li.querySelector('h3')).innerText === criteria);
-
-                                return el ? el.querySelectorAll('span') : [];
-                            });
-
-                            return Array.from(nodeList)
-                                .map(spanList => Array.from(spanList as Array<HTMLElement>)
-                                    .map(e => e.innerText).join(', '));
-                        },
-                        Selectors.criteria
-                    );
                 }
                 catch(err: any) {
                     const errorMessage = `${tag}\t${err.message}`;
@@ -472,10 +429,6 @@ export class AnonymousStrategy extends RunStrategy {
                     description: jobDescription! as string,
                     descriptionHTML: jobDescriptionHTML! as string,
                     date: jobDate!,
-                    senorityLevel: jobSenorityLevel,
-                    jobFunction: jobFunction,
-                    employmentType: jobEmploymentType,
-                    industries: jobIndustries,
                     insights: [],
                 });
 

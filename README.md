@@ -8,11 +8,7 @@
 > `link`, 
 > `[applyLink]`,
 > `description`, 
-> `descriptionHTML`, 
-> `senorityLevel`, 
-> `jobFunction`, 
-> `employmentType`, 
-> `industries`, 
+> `descriptionHTML`,
 > `insights`. <br><br>
 > It's also available an equivalent [package in python](https://github.com/spinlud/py-linkedin-jobs-scraper).
 
@@ -76,10 +72,6 @@ const {
             `Date='${data.date}'`,
             `Link='${data.link}'`,
             `applyLink='${data.applyLink ? data.applyLink : "N/A"}'`,
-            `senorityLevel='${data.senorityLevel}'`,
-            `function='${data.jobFunction}'`,
-            `employmentType='${data.employmentType}'`,
-            `industries='${data.industries}'`,
             `insights='${data.insights}'`,
         );
     });
@@ -147,94 +139,8 @@ Each `LinkedinScraper` instance is associated with one browser (Chromium) instan
  to instantiate Chromium browser instances; the same browser options and events are supported.
  For more informations about browser options see: [puppeteer-browser-options](https://pptr.dev/#?product=Puppeteer&version=v2.0.0&show=api-puppeteerlaunchoptions).
  For more information about browser events see: [puppeteer-browser-events](https://pptr.dev/#?product=Puppeteer&version=v2.0.0&show=api-class-browser).
- The main method is `run` which takes the following parameters:
  
-* `queries` {IQuery | IQuery[]} required.
-* [`options`] {IQueryOptions} optional: 
-    - [`limit`] {Number} Number of jobs to retrieve per `query-location`.
-    - [`descriptionFn`] {Function} Function executed on browser side (you have access to `window`, `document`, etc) to extract job description.
-    - [`filters`] {Object} Filter options (see section [Filters](#filters) for more details). 
-    - [`optimize`] {Boolean} Block resources such as images, stylesheets etc to improve bandwidth usage. Specifically the following resources are blocked:
-        * image
-        * stylesheet
-        * media
-        * font
-        * texttrack
-        * object
-        * beacon
-        * csp_report
-        * imageset
- 
-```ts
-/**
- * Main class
- * @extends EventEmitter
- * @param options {LaunchOptions} Puppeteer launch options, for more informations see https://pptr.dev/#?product=Puppeteer&version=v2.0.0&show=api-puppeteerlaunchoptions
- * @constructor
- */
-constructor(options: LaunchOptions) { }
 
-/**
- * Scrape linkedin jobs
- * @param {IQuery | IQuery[]} queries
- * @param {IQueryOptions} [options]
- * @return {Promise<void>}
- */
-async run (
-    queries: IQuery | IQuery[],
-    options?: IQueryOptions
-) { }
-
-/**
-* Close browser instance
-* @returns {Promise<void>}
-*/
-async close() { }
-
-/**
- * Enable logger
- * @returns void
- * @static
- */
-enableLogger() { }
-
-/**
- * Disable logger
- * @returns void
- * @static
- */
-disableLogger() { }
-
-/**
- * Enable logger debug namespace
- * @returns void
- * @static
- */
-enableLoggerDebug() { }
-
-
-/**
- * Enable logger info namespace
- * @returns void
- * @static
- */
-enableLoggerInfo() { }
-
-/**
- * Enable logger warn namespace
- * @returns void
- * @static
- */
-enableLoggerWarn() { }
-
-
-/**
- * Enable logger error namespace
- * @returns void
- * @static
- */
-enableLoggerError() { } 
-```
 
 ## Anonymous vs authenticated session
 **⚠ WARNING: due to lack of time, anonymous session strategy is no longer maintained. If someone wants to keep

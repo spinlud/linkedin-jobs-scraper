@@ -23,10 +23,6 @@ describe('[TEST]', () => {
         expect(data.description).toBeDefined();
         expect(data.descriptionHTML).toBeDefined();
         expect(data.link).toBeDefined();
-        expect(data.senorityLevel).toBeDefined();
-        expect(data.jobFunction).toBeDefined();
-        expect(data.employmentType).toBeDefined();
-        expect(data.industries).toBeDefined();
 
         expect(data.location.length).toBeGreaterThan(0);
         expect(data.jobId.length).toBeGreaterThan(0);

@@ -15,10 +15,6 @@ export interface IData {
     date: string;
     description: string;
     descriptionHTML: string;
-    senorityLevel: string;
-    jobFunction: string;
-    employmentType: string;
-    industries: string;
     insights: string[];
 }
 

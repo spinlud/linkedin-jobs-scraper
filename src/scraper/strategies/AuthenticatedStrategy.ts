@@ -22,7 +22,6 @@ export const selectors = {
     detailsTop: '.jobs-details-top-card',
     details: '.jobs-details__main-content',
     insights: '[class=jobs-unified-top-card__job-insight]', // only one class
-    criteria: '.jobs-box__group h3',
     pagination: '.jobs-search-two-pane__pagination',
     paginationNextBtn: 'li[data-test-pagination-page-btn].selected + li',
     paginationBtn: (index: number) => `li[data-test-pagination-page-btn="${index}"] button`,
@@ -419,65 +418,11 @@ export class AuthenticatedStrategy extends RunStrategy {
                         selectors.insights,
                     ]);
 
-                    // Extract job criteria
-                    logger.debug(tag, 'Evaluating selectors', [
-                        selectors.criteria,
-                    ]);
-
                     jobInsights = await page.evaluate((jobInsightsSelector: string) => {
                         const nodes = document.querySelectorAll(jobInsightsSelector);
                         return Array.from(nodes).map(e => e.textContent!
                             .replace(/[\n\r\t ]+/g, ' ').trim());
                     }, selectors.insights);
-
-                    [
-                        jobSenorityLevel,
-                        jobEmploymentType,
-                        jobIndustry,
-                        jobFunction,
-                    ] = await page.evaluate(
-                        (
-                            jobCriteriaSelector: string
-                        ) => {
-                            const nodes = document.querySelectorAll<HTMLElement>(jobCriteriaSelector);
-
-                            const criteria = [
-                                "Seniority Level",
-                                "Employment Type",
-                                "Industry",
-                                "Job Functions",
-                            ];
-
-                            const [
-                                senoriotyLevel,
-                                employmentType,
-                                industry,
-                                jobFunctions,
-                            ] = criteria.map(criteria => {
-                                const el = Array.from(nodes)
-                                    .find(node => node.innerText.trim() === criteria);
-
-                                if (el && el.nextElementSibling) {
-                                    const sibling = el.nextElementSibling as HTMLElement;
-                                    return sibling.innerText
-                                        .replace(/[\s]{2,}/g, ", ")
-                                        .replace(/[\n\r]+/g, " ")
-                                        .trim();
-                                }
-                                else {
-                                    return "";
-                                }
-                            });
-
-                            return [
-                                senoriotyLevel,
-                                employmentType,
-                                industry,
-                                jobFunctions
-                            ];
-                        },
-                        selectors.criteria
-                    );
 
                     // Apply link
                     if (query.options?.applyLink) {
@@ -524,10 +469,6 @@ export class AuthenticatedStrategy extends RunStrategy {
                     description: jobDescription! as string,
                     descriptionHTML: jobDescriptionHTML! as string,
                     date: jobDate!,
-                    senorityLevel: jobSenorityLevel,
-                    jobFunction: jobFunction,
-                    employmentType: jobEmploymentType,
-                    industries: jobIndustry,
                     insights: jobInsights,
                 });
 

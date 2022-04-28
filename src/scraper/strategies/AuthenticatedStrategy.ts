@@ -3,6 +3,7 @@ import { RunStrategy, IRunStrategyResult, ILoadResult } from "./RunStrategy";
 import { BrowserContext, Page } from "puppeteer";
 import { events } from "../events";
 import { sleep } from "../../utils/utils";
+import { normalizeString } from "../../utils/string";
 import { IQuery } from "../query";
 import { logger } from "../../logger/logger";
 import { urls } from "../constants";
@@ -482,11 +483,11 @@ export class AuthenticatedStrategy extends RunStrategy {
                     jobIndex: jobIndex,
                     link: jobLink!,
                     applyLink: jobApplyLink,
-                    title: jobTitle!,
-                    company: jobCompany!,
+                    title: normalizeString(jobTitle!),
+                    company: normalizeString(jobCompany!),
                     companyLink: jobCompanyLink,
                     companyImgLink: jobCompanyImgLink,
-                    place: jobPlace!,
+                    place: normalizeString(jobPlace!),
                     description: jobDescription! as string,
                     descriptionHTML: jobDescriptionHTML! as string,
                     date: jobDate!,

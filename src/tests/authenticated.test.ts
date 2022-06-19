@@ -62,6 +62,7 @@ describe('[TEST]', () => {
             query: "c#",
             options: {
                 locations: ['Finland'],
+                optimize: true,
                 limit: 33,
                 filters: {
                     time: timeFilter.WEEK,
@@ -82,7 +83,6 @@ describe('[TEST]', () => {
     ];
 
     const globalOptions: IQueryOptions = {
-        optimize: false,
         limit: 10,
         locations: ['United Kingdom'],
         filters: {

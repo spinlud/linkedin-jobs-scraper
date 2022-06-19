@@ -61,6 +61,8 @@ const {
     });
 
     // Add listeners for scraper events
+    
+    // Emitted once for each processed job
     scraper.on(events.scraper.data, (data) => {
         console.log(
             data.description.length,
@@ -79,6 +81,11 @@ const {
             `insights='${data.insights}'`,
         );
     });
+    
+    // Emitted once for each scraped page
+    scraper.on(events.scraper.metrics, (metrics) => {
+        // ...        
+    });
 
     scraper.on(events.scraper.error, (err) => {
         console.error(err);
@@ -88,7 +95,7 @@ const {
         console.log('All done!');
     });
 
-    // Add listeners for puppeteer browser events
+    // Add listeners for puppeteer browser events [optional]
     scraper.on(events.puppeteer.browser.targetcreated, () => {
     });
     scraper.on(events.puppeteer.browser.targetchanged, () => {
@@ -121,12 +128,11 @@ const {
                 query: "Sales",
                 options: {                    
                     limit: 10, // This will override global option limit (33)
-                    applyLink: true, // Try to extract apply link (slower). Default to false
+                    applyLink: false, // Try to extract apply link. Default to true.
                 }
             },
         ], { // Global options, will be merged individually with each query options
             locations: ["Europe"],
-            optimize: true,
             limit: 33,
         }),
     ]);
@@ -254,8 +260,7 @@ const {
                     remote: remoteFilter.REMOTE, // supported only with authenticated session
                 }
             }
-        }, {
-            optimize: true,
+        }, {         
             locations: ["United States"],
             limit: 10,
         });

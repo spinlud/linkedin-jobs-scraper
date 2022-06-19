@@ -77,6 +77,13 @@ export const validateQuery = (query: IQuery): IQueryValidationError[] => {
             });
         }
 
+        if (query.options.hasOwnProperty("applyLink") && typeof(query.options.applyLink) !== "boolean") {
+            errors.push({
+                param: "options.applyLink",
+                reason: `Must be a boolean`
+            });
+        }
+
         if (limit && (!Number.isInteger(limit) || limit <= 0)) {
             errors.push({
                 param: "options.limit",

@@ -185,6 +185,12 @@ class LinkedinScraper extends Scraper {
             await this._initialize();
         }
 
+        const wsEndpoint = this._browser!.wsEndpoint();
+
+        if (wsEndpoint) {
+            logger.info('Websocket debugger url:', wsEndpoint);
+        }
+
         // Queries loop
         for (const query of queries) {
             // Locations loop
@@ -197,14 +203,14 @@ class LinkedinScraper extends Scraper {
                 const page = await this._context!.newPage();
 
                 // Create Chrome Developer Tools session
-                const session = await page.target().createCDPSession();
+                const cdpSession = await page.target().createCDPSession();
 
                 // Disable Content Security Policy: needed for pagination to work properly in anonymous mode
                 await page.setBypassCSP(true);
 
                 // Tricks to speed up page
-                await session.send('Page.enable');
-                await session.send('Page.setWebLifecycleState', {
+                await cdpSession.send('Page.enable');
+                await cdpSession.send('Page.setWebLifecycleState', {
                     state: 'active',
                 });
 
@@ -218,22 +224,28 @@ class LinkedinScraper extends Scraper {
                     const url = new URL(request.url());
                     const domain = url.hostname.split(".").slice(-2).join(".").toLowerCase();
 
-                    // Block tracking and 3rd party requests
-                    if (url.pathname.includes("li/track") || !["linkedin.com", "licdn.com"].includes(domain)) {
+                    // Block tracking and other stuff not useful
+                    const toBlock = [
+                        'li/track',
+                        'realtime.www.linkedin.com/realtime',
+                    ];
+
+                    if (toBlock.some(e => url.pathname.includes(e))) {
                         return request.abort();
                     }
 
-                    // It optimization is enabled, block other resource types
+                    // Block 3rd part domains requests
+                    if (!["linkedin.com", "licdn.com"].includes(domain)) {
+                        return request.abort();
+                    }
+
+                    // If optimization is enabled, block other resource types
                     if (query.options!.optimize) {
                         const resourcesToBlock = [
                             "image",
                             "stylesheet",
                             "media",
                             "font",
-                            "texttrack",
-                            "object",
-                            "beacon",
-                            "csp_report",
                             "imageset",
                         ];
 
@@ -249,7 +261,7 @@ class LinkedinScraper extends Scraper {
                         }
                     }
 
-                    request.continue();
+                    await request.continue();
                 }
 
                 // Add listener
@@ -269,7 +281,14 @@ class LinkedinScraper extends Scraper {
                 const searchUrl = this._buildSearchUrl(query.query || "", location, query.options!);
 
                 // Run strategy
-                const runStrategyResult = await this._runStrategy.run(this._context!, page, searchUrl, query, location);
+                const runStrategyResult = await this._runStrategy.run(
+                    this._context!,
+                    page,
+                    cdpSession,
+                    searchUrl,
+                    query,
+                    location
+                );
 
                 // Check if forced exit is required
                 if (runStrategyResult.exit) {

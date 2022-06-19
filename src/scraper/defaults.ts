@@ -36,8 +36,8 @@ const browserDefaults: ScraperOptions = {
 const queryOptionsDefault: IQueryOptions = {
     locations: [],
     limit: 25,
-    optimize: true,
-    applyLink: false,
+    optimize: false,
+    applyLink: true,
 };
 
 export { browserDefaults, queryOptionsDefault };

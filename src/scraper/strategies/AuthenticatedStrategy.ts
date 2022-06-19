@@ -1,7 +1,7 @@
 import { config } from "../../config";
 import { RunStrategy, IRunStrategyResult, ILoadResult } from "./RunStrategy";
-import { BrowserContext, Page } from "puppeteer";
-import { events } from "../events";
+import { BrowserContext, Page, CDPSession } from "puppeteer";
+import { events, IMetrics } from "../events";
 import { sleep } from "../../utils/utils";
 import { normalizeString } from "../../utils/string";
 import { IQuery } from "../query";
@@ -25,6 +25,7 @@ export const selectors = {
     details: '.jobs-details__main-content',
     insights: '[class=jobs-unified-top-card__job-insight]', // only one class
     pagination: '.jobs-search-two-pane__pagination',
+    privacyAcceptBtn: 'button.artdeco-global-alert__action',
     paginationNextBtn: 'li[data-test-pagination-page-btn].selected + li',
     paginationBtn: (index: number) => `li[data-test-pagination-page-btn="${index}"] button`,
 };
@@ -49,6 +50,46 @@ export class AuthenticatedStrategy extends RunStrategy {
     };
 
     /**
+     * Load jobs
+     * @param page {Page}
+     * @param jobsTot {number}
+     * @param timeout {number}
+     * @static
+     * @private
+     */
+    private static _loadJobs = async (
+        page: Page,
+        jobsTot: number,
+        timeout: number = 2000,
+    ): Promise<any> => {
+        const pollingTime = 50;
+        let elapsed = 0;
+
+        await sleep(pollingTime);
+
+        try {
+            while (elapsed < timeout) {
+                const jobsCount = await page.evaluate((selector) => {
+                    return document.querySelectorAll(selector).length;
+                }, selectors.jobs);
+
+                if (jobsCount > jobsTot) {
+                    return { success: true, count: jobsCount };
+                }
+
+                await sleep(pollingTime);
+                elapsed += pollingTime;
+            }
+        }
+        catch (err) {}
+
+        return {
+            success: false,
+            error: `Timeout on loading jobs`
+        };
+    };
+
+    /**
      * Try to load job details
      * @param {Page} page
      * @param {string} jobId
@@ -61,40 +102,41 @@ export class AuthenticatedStrategy extends RunStrategy {
         jobId: string,
         timeout: number = 2000,
     ): Promise<ILoadResult> => {
-        const pollingTime = 100;
+        const pollingTime = 50;
         let elapsed = 0;
         let loaded = false;
 
-        await sleep(pollingTime); // Baseline to wait
+        await sleep(pollingTime);
 
-        while(!loaded) {
-            loaded = await page.evaluate(
-                (jobId, panelSelector, descriptionSelector) => {
-                    const detailsPanel = document.querySelector(panelSelector);
-                    const description = document.querySelector(descriptionSelector);
-                    return detailsPanel && detailsPanel.innerHTML.includes(jobId) &&
-                        description && description.innerText.length > 0;
-                },
-                jobId,
-                selectors.detailsPanel,
-                selectors.description,
-            );
+        try {
+            while (elapsed < timeout) {
+                loaded = await page.evaluate(
+                    (jobId, panelSelector, descriptionSelector) => {
+                        const detailsPanel = document.querySelector(panelSelector);
+                        const description = document.querySelector(descriptionSelector);
+                        return detailsPanel && detailsPanel.innerHTML.includes(jobId) &&
+                            description && description.innerText.length > 0;
+                    },
+                    jobId,
+                    selectors.detailsPanel,
+                    selectors.description,
+                );
 
-            if (loaded) return { success: true };
+                if (loaded) {
+                    return { success: true };
+                }
 
-            await sleep(pollingTime);
-            elapsed += pollingTime;
-
-            if (elapsed >= timeout) {
-                return {
-                    success: false,
-                    error: `Timeout on loading job details`
-                };
+                await sleep(pollingTime);
+                elapsed += pollingTime;
             }
         }
+        catch (err) {}
 
-        return { success: true };
-    }
+        return {
+            success: false,
+            error: `Timeout on loading job details`
+        };
+    };
 
     /**
      * Try to paginate
@@ -208,8 +250,34 @@ export class AuthenticatedStrategy extends RunStrategy {
     };
 
     /**
-     * Run strategy
+     * Accept privacy
      * @param page
+     * @param tag
+     */
+    private static _acceptPrivacy = async (
+        page: Page,
+        tag: string,
+    ): Promise<void> => {
+        try {
+            await page.evaluate((selector) => {
+                const privacyButton = Array.from(document.querySelectorAll(selector))
+                    .find(e => e.innerText === 'Accept');
+
+                if (privacyButton) {
+                    privacyButton.click();
+                }
+            }, selectors.privacyAcceptBtn);
+        }
+        catch (err) {
+            logger.debug(tag, "Failed to accept privacy");
+        }
+    };
+
+    /**
+     * Run strategy
+     * @param browser
+     * @param page
+     * @param cdpSession
      * @param url
      * @param query
      * @param location
@@ -217,13 +285,21 @@ export class AuthenticatedStrategy extends RunStrategy {
     public run = async (
         browser: BrowserContext,
         page: Page,
+        cdpSession: CDPSession,
         url: string,
         query: IQuery,
         location: string,
     ): Promise<IRunStrategyResult> => {
         let tag = `[${query.query}][${location}]`;
-        let processed = 0;
-        let paginationIndex = 1;
+
+        const metrics: IMetrics = {
+            processed: 0,
+            failed: 0,
+            missed: 0,
+        };
+
+        let paginationIndex = 0;
+        let paginationSize = 25;
 
         // Navigate to home page
         logger.debug(tag, "Opening", urls.home);
@@ -240,6 +316,7 @@ export class AuthenticatedStrategy extends RunStrategy {
             domain: ".www.linkedin.com"
         });
 
+        // Open search url
         logger.info(tag, "Opening", url);
 
         await page.goto(url, {
@@ -262,7 +339,7 @@ export class AuthenticatedStrategy extends RunStrategy {
         }
 
         // Pagination loop
-        while (processed < query.options!.limit!) {
+        while (metrics.processed < query.options!.limit!) {
             // Verify session in the loop
             if (!(await AuthenticatedStrategy._isAuthenticatedSession(page))) {
                 logger.warn(tag, "Session is invalid, this may cause the scraper to fail.");
@@ -272,11 +349,9 @@ export class AuthenticatedStrategy extends RunStrategy {
                 logger.info(tag, "Session is valid");
             }
 
-            // Try to hide chat panel
             await AuthenticatedStrategy._hideChatPanel(page, tag);
-
-            // Accept cookies
             await AuthenticatedStrategy._acceptCookies(page, tag);
+            await AuthenticatedStrategy._acceptPrivacy(page, tag);
 
             let jobIndex = 0;
 
@@ -291,11 +366,9 @@ export class AuthenticatedStrategy extends RunStrategy {
                 break;
             }
 
-            logger.info(tag, "Jobs fetched: " + jobsTot);
-
             // Jobs loop
-            while (jobIndex < jobsTot && processed < query.options!.limit!) {
-                tag = `[${query.query}][${location}][${processed + 1}]`;
+            while (jobIndex < jobsTot && metrics.processed < query.options!.limit!) {
+                tag = `[${query.query}][${location}][${metrics.processed + 1}]`;
 
                 let jobId;
                 let jobLink;
@@ -446,86 +519,104 @@ export class AuthenticatedStrategy extends RunStrategy {
 
                     // Apply link
                     if (query.options?.applyLink) {
-                        if (await page.evaluate((applyBtnSelector: string) => {
-                            const applyBtn = document.querySelector(applyBtnSelector) as HTMLButtonElement;
+                        try {
+                            if (await page.evaluate((applyBtnSelector: string) => {
+                                const applyBtn = document.querySelector(applyBtnSelector) as HTMLButtonElement;
 
-                            if (applyBtn) {
-                                applyBtn.click();
-                                window.stop();
-                                return true;
-                            }
+                                if (applyBtn) {
+                                    applyBtn.click();
+                                    return true;
+                                }
 
-                            return false;
-                        }, selectors.applyBtn)) {
-                            // Reference: https://github.com/puppeteer/puppeteer/issues/3718#issuecomment-451325093
-                            const newTarget = await browser.waitForTarget(target => target.opener() === page.target());
-                            const applyPage = await newTarget.page();
+                                return false;
+                            }, selectors.applyBtn)) {
+                                logger.debug(tag, 'Try extracting apply link');
+                                const targetsResponse = await cdpSession.send('Target.getTargets');
 
-                            if (applyPage) {
-                                jobApplyLink = applyPage.url();
-                                await applyPage.close();
+                                // The first not attached target should be the apply page
+                                if (targetsResponse.targetInfos && targetsResponse.targetInfos.length > 1) {
+                                    const applyTarget = targetsResponse.targetInfos.find(e => !e.attached);
+
+                                    if (applyTarget) {
+                                        jobApplyLink = applyTarget.url;
+                                        await cdpSession.send('Target.closeTarget', { targetId: applyTarget.targetId });
+                                    }
+                                }
                             }
                         }
+                        catch (err) {
+                            logger.warn(tag, 'Failed to extract apply link', err);
+                        }
+                    }
+
+                    // Emit data
+                    this.scraper.emit(events.scraper.data, {
+                        query: query.query || "",
+                        location: location,
+                        jobId: jobId!,
+                        jobIndex: jobIndex,
+                        link: jobLink!,
+                        applyLink: jobApplyLink,
+                        title: normalizeString(jobTitle!),
+                        company: normalizeString(jobCompany!),
+                        companyLink: jobCompanyLink,
+                        companyImgLink: jobCompanyImgLink,
+                        place: normalizeString(jobPlace!),
+                        description: jobDescription! as string,
+                        descriptionHTML: jobDescriptionHTML! as string,
+                        date: jobDate!,
+                        insights: jobInsights,
+                    });
+
+                    jobIndex += 1;
+                    metrics.processed += 1;
+                    logger.info(tag, `Processed`);
+
+                    if (metrics.processed < query.options!.limit! && jobIndex === jobsTot && jobsTot < paginationSize) {
+                        const loadJobsResult = await AuthenticatedStrategy._loadJobs(page, jobsTot);
+
+                        if (loadJobsResult.success) {
+                            jobsTot = loadJobsResult.count;
+                        }
+                    }
+
+                    if (jobIndex === jobsTot) {
+                        break;
                     }
                 }
                 catch(err: any) {
                     const errorMessage = `${tag}\t${err.message}`;
                     this.scraper.emit(events.scraper.error, errorMessage);
                     jobIndex++;
+                    metrics.failed++;
                     continue;
-                }
-
-                // Emit data
-                this.scraper.emit(events.scraper.data, {
-                    query: query.query || "",
-                    location: location,
-                    jobId: jobId!,
-                    jobIndex: jobIndex,
-                    link: jobLink!,
-                    applyLink: jobApplyLink,
-                    title: normalizeString(jobTitle!),
-                    company: normalizeString(jobCompany!),
-                    companyLink: jobCompanyLink,
-                    companyImgLink: jobCompanyImgLink,
-                    place: normalizeString(jobPlace!),
-                    description: jobDescription! as string,
-                    descriptionHTML: jobDescriptionHTML! as string,
-                    date: jobDate!,
-                    insights: jobInsights,
-                });
-
-                jobIndex += 1;
-                processed += 1;
-                logger.info(tag, `Processed`);
-
-                if (processed < query.options!.limit! && jobIndex === jobsTot) {
-                    logger.info(tag, 'Fecthing more jobs');
-                    const fetched = await page.evaluate(
-                        (selector) => document.querySelectorAll(selector).length,
-                        selectors.jobs
-                    );
-
-                    if (fetched === jobsTot) {
-                        logger.info(tag, "No more jobs available in this page");
-                    }
-                    else {
-                        jobsTot = fetched;
-                    }
                 }
             }
 
-            // Check if we reached the limit of jobs to process
-            if (processed === query.options!.limit!) break;
+            tag = `[${query.query}][${location}]`;
 
-            // Try pagination to load more jobs
+            logger.info(tag, 'No more jobs to process in this page');
+
+            // Check if we reached the limit of jobs to process
+            if (metrics.processed === query.options!.limit!) {
+                logger.info(tag, 'Query limit reached!')
+                break;
+            }
+            else {
+                metrics.failed += paginationSize - jobIndex;
+            }
+
+            // Emit metrics
+            this.scraper.emit(events.scraper.metrics, metrics);
+            logger.info(tag, 'Metrics:', metrics);
+
+            // Try to paginate
             paginationIndex += 1;
-            logger.info(tag, `Pagination requested (${paginationIndex})`);
+            logger.info(tag, `Pagination requested [${paginationIndex}]`);
             const paginationResult = await AuthenticatedStrategy._paginate(page, tag);
 
-            // Check if loading jobs has failed
             if (!paginationResult.success) {
-                logger.info(tag, paginationResult.error);
-                logger.info(tag, "There are no more jobs available for the current query");
+                logger.info(tag, `Couldn\'t find more jobs for the running query`);
                 break;
             }
         }

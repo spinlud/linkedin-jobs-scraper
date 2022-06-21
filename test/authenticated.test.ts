@@ -1,13 +1,14 @@
-import { IData } from "../scraper/events";
-import { IQuery, IQueryOptions } from "../scraper/query";
-import { killChromium } from "../utils/browser";
+import { IData } from "../src/scraper/events";
+import { IQuery, IQueryOptions } from "../src/scraper/query";
+import { killChromium } from "../src/utils/browser";
+import { sleep } from '../src/utils/utils';
 import {
     LinkedinScraper,
     timeFilter,
     relevanceFilter,
     experienceLevelFilter,
     events,
-} from "..";
+} from "../src";
 
 describe('[TEST]', () => {
     jest.setTimeout(240000);
@@ -46,13 +47,24 @@ describe('[TEST]', () => {
         }
     };
 
-    const onErrorFn = (err: Error | string) => {
-        console.error(err);
-    };
+    const descriptionFn = () => (<HTMLElement>document.querySelector(".jobs-description")!)
+        .innerText
+        .replace(/[\s\n\r]+/g, " ")
+        .trim();
 
-    const onEndFn = () => {
-        console.log("\nE N D (ツ)_.\\m/");
-    }
+    const scraper = new LinkedinScraper({
+        headless: true,
+        args: [
+            "--remote-debugging-address=0.0.0.0",
+            "--remote-debugging-port=9222",
+        ],
+        slowMo: 200,
+    });
+
+    afterEach(async () => {
+        // Necessary to avoid Jest error: `ReferenceError: You are trying to `import` a file after the Jest environment has been torn down.`
+        await sleep(2000);
+    });
 
     const queriesSerial1: IQuery[] = [
         {
@@ -64,6 +76,7 @@ describe('[TEST]', () => {
                 locations: ['Finland'],
                 optimize: true,
                 limit: 33,
+                descriptionFn,
                 filters: {
                     time: timeFilter.WEEK,
                     experience: experienceLevelFilter.MID_SENIOR,
@@ -91,32 +104,17 @@ describe('[TEST]', () => {
         },
     };
 
-    it('Logged-in strategy', async () => {
+    it('Authenticated strategy',  async () => {
         expect(process.env.LI_AT_COOKIE).toBeDefined();
         expect(process.env.LI_AT_COOKIE!.length).toBeGreaterThan(0);
 
-        const scraper = new LinkedinScraper({
-            headless: true,
-            args: [
-                "--remote-debugging-address=0.0.0.0",
-                "--remote-debugging-port=9222",
-            ],
-            slowMo: 250,
-        });
-
         scraper.on(events.scraper.data, onDataFn);
-        scraper.on(events.scraper.invalidSession, () => { console.error("Invalid session!"); });
-        scraper.on(events.scraper.error, onErrorFn);
-        scraper.on(events.scraper.end, onEndFn);
+        scraper.on(events.scraper.invalidSession, () => { console.error("Invalid session!") });
+        scraper.on(events.scraper.error, (err) => { console.error(err) });
+        scraper.on(events.scraper.end, () => console.log("\nE N D (ツ)_.\\m/"));
 
-        try {
-            await Promise.all([
-                scraper.run(queriesSerial1, globalOptions),
-            ]);
-        }
-        finally {
-            await scraper.close();
-            await killChromium();
-        }
+        await scraper.run(queriesSerial1, globalOptions);
+        await scraper.close();
+        await killChromium();
     });
 });

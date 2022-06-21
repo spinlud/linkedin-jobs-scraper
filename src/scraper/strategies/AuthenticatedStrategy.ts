@@ -548,41 +548,6 @@ export class AuthenticatedStrategy extends RunStrategy {
                             logger.warn(tag, 'Failed to extract apply link', err);
                         }
                     }
-
-                    // Emit data
-                    this.scraper.emit(events.scraper.data, {
-                        query: query.query || "",
-                        location: location,
-                        jobId: jobId!,
-                        jobIndex: jobIndex,
-                        link: jobLink!,
-                        applyLink: jobApplyLink,
-                        title: normalizeString(jobTitle!),
-                        company: normalizeString(jobCompany!),
-                        companyLink: jobCompanyLink,
-                        companyImgLink: jobCompanyImgLink,
-                        place: normalizeString(jobPlace!),
-                        description: jobDescription! as string,
-                        descriptionHTML: jobDescriptionHTML! as string,
-                        date: jobDate!,
-                        insights: jobInsights,
-                    });
-
-                    jobIndex += 1;
-                    metrics.processed += 1;
-                    logger.info(tag, `Processed`);
-
-                    if (metrics.processed < query.options!.limit! && jobIndex === jobsTot && jobsTot < paginationSize) {
-                        const loadJobsResult = await AuthenticatedStrategy._loadJobs(page, jobsTot);
-
-                        if (loadJobsResult.success) {
-                            jobsTot = loadJobsResult.count;
-                        }
-                    }
-
-                    if (jobIndex === jobsTot) {
-                        break;
-                    }
                 }
                 catch(err: any) {
                     const errorMessage = `${tag}\t${err.message}`;
@@ -590,6 +555,41 @@ export class AuthenticatedStrategy extends RunStrategy {
                     jobIndex++;
                     metrics.failed++;
                     continue;
+                }
+
+                // Emit data (NB: should be outside of try/catch block to be properly tested)
+                this.scraper.emit(events.scraper.data, {
+                    query: query.query || "",
+                    location: location,
+                    jobId: jobId!,
+                    jobIndex: jobIndex,
+                    link: jobLink!,
+                    applyLink: jobApplyLink,
+                    title: normalizeString(jobTitle!),
+                    company: normalizeString(jobCompany!),
+                    companyLink: jobCompanyLink,
+                    companyImgLink: jobCompanyImgLink,
+                    place: normalizeString(jobPlace!),
+                    description: jobDescription! as string,
+                    descriptionHTML: jobDescriptionHTML! as string,
+                    date: jobDate!,
+                    insights: jobInsights,
+                });
+
+                jobIndex += 1;
+                metrics.processed += 1;
+                logger.info(tag, `Processed`);
+
+                if (metrics.processed < query.options!.limit! && jobIndex === jobsTot && jobsTot < paginationSize) {
+                    const loadJobsResult = await AuthenticatedStrategy._loadJobs(page, jobsTot);
+
+                    if (loadJobsResult.success) {
+                        jobsTot = loadJobsResult.count;
+                    }
+                }
+
+                if (jobIndex === jobsTot) {
+                    break;
                 }
             }
 
@@ -600,6 +600,11 @@ export class AuthenticatedStrategy extends RunStrategy {
             // Check if we reached the limit of jobs to process
             if (metrics.processed === query.options!.limit!) {
                 logger.info(tag, 'Query limit reached!')
+
+                // Emit metrics
+                this.scraper.emit(events.scraper.metrics, metrics);
+                logger.info(tag, 'Metrics:', metrics);
+
                 break;
             }
             else {

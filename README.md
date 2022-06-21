@@ -84,7 +84,7 @@ const {
     
     // Emitted once for each scraped page
     scraper.on(events.scraper.metrics, (metrics) => {
-        // ...        
+        console.log(`Processed=${metrics.processed}`, `Failed=${metrics.failed}`, `Missed=${metrics.missed}`);        
     });
 
     scraper.on(events.scraper.error, (err) => {
@@ -95,18 +95,8 @@ const {
         console.log('All done!');
     });
 
-    // Add listeners for puppeteer browser events [optional]
-    scraper.on(events.puppeteer.browser.targetcreated, () => {
-    });
-    scraper.on(events.puppeteer.browser.targetchanged, () => {
-    });
-    scraper.on(events.puppeteer.browser.targetdestroyed, () => {
-    });
-    scraper.on(events.puppeteer.browser.disconnected, () => {
-    });
-
     // Custom function executed on browser side to extract job description [optional]
-    const descriptionFn = () => document.querySelector(".description__text")
+    const descriptionFn = () => document.querySelector(".jobs-description")
         .innerText
         .replace(/[\s\n\r]+/g, " ")
         .trim();
@@ -129,6 +119,7 @@ const {
                 options: {                    
                     limit: 10, // This will override global option limit (33)
                     applyLink: false, // Try to extract apply link. Default to true.
+                    descriptionFn: descriptionFn, // Custom job description processor
                 }
             },
         ], { // Global options, will be merged individually with each query options

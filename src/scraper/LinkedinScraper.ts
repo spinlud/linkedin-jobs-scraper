@@ -340,8 +340,10 @@ class LinkedinScraper extends Scraper {
             );
         }
         catch (err: any) {
-            logger.error(err);
+            // logger.error(err);
             this.emit(events.scraper.error, err);
+            await this.close();
+            throw err;
         }
     };
 

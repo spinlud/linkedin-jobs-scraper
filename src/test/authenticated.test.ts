@@ -1,14 +1,14 @@
-import { IData } from "../src/scraper/events";
-import { IQuery, IQueryOptions } from "../src/scraper/query";
-import { killChromium } from "../src/utils/browser";
-import { sleep } from '../src/utils/utils';
+import { IData } from "../scraper/events";
+import { IQuery, IQueryOptions } from "../scraper/query";
+import { killChromium } from "../utils/browser";
+import { sleep } from '../utils/utils';
 import {
     LinkedinScraper,
     timeFilter,
     relevanceFilter,
     experienceLevelFilter,
     events,
-} from "../src";
+} from "../index";
 
 describe('[TEST]', () => {
     jest.setTimeout(240000);

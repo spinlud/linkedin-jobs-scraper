@@ -1,6 +1,6 @@
 {
   "name": "linkedin-jobs-scraper",
-  "version": "12.0.0",
+  "version": "12.0.1",
   "description": "Scrape public available jobs on Linkedin using headless browser",
   "main": "build/index.js",
   "types": "build/index.d.ts",
@@ -8,8 +8,8 @@
     "clean": "rm -fr build",
     "build": "npm run clean && tsc",
     "test-authenticated": "DEBUG=scraper:info jest authenticated.test.ts",
-    "test-authenticated-mocha": "DEBUG=scraper:info mocha --timeout 300000 test/authenticated.test.ts",
-    "test-authenticated-node": "DEBUG=scraper:info ts-node test/dummy.ts",
+    "test-authenticated-mocha": "DEBUG=scraper:info mocha --timeout 300000 src/test/authenticated.test.ts",
+    "test-authenticated-node": "DEBUG=scraper:info ts-node src/test/dummy.ts",
     "test-anonymous": "DEBUG=scraper:info jest anonymous.test.ts",
     "tmp": "ts-node src/tmp/tmp1.ts"
   },

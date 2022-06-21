@@ -368,7 +368,7 @@ export class AuthenticatedStrategy extends RunStrategy {
 
             // Jobs loop
             while (jobIndex < jobsTot && metrics.processed < query.options!.limit!) {
-                tag = `[${query.query}][${location}][${metrics.processed + 1}]`;
+                tag = `[${query.query}][${location}][${paginationIndex * paginationSize + jobIndex + 1}]`;
 
                 let jobId;
                 let jobLink;
@@ -608,7 +608,7 @@ export class AuthenticatedStrategy extends RunStrategy {
                 break;
             }
             else {
-                metrics.failed += paginationSize - jobIndex;
+                metrics.missed += paginationSize - jobIndex;
             }
 
             // Emit metrics

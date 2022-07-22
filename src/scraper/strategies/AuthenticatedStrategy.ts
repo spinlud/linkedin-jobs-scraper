@@ -112,8 +112,8 @@ export class AuthenticatedStrategy extends RunStrategy {
             while (elapsed < timeout) {
                 loaded = await page.evaluate(
                     (jobId, panelSelector, descriptionSelector) => {
-                        const detailsPanel = document.querySelector(panelSelector);
-                        const description = document.querySelector(descriptionSelector);
+                        const detailsPanel = document.querySelector(panelSelector) as HTMLElement;
+                        const description = document.querySelector(descriptionSelector) as HTMLElement;
                         return detailsPanel && detailsPanel.innerHTML.includes(jobId) &&
                             description && description.innerText.length > 0;
                     },
@@ -213,7 +213,7 @@ export class AuthenticatedStrategy extends RunStrategy {
     ): Promise<void> => {
         try {
             await page.evaluate((selector) => {
-                    const div = document.querySelector(selector);
+                    const div = document.querySelector(selector) as HTMLElement;
                     if (div) {
                         div.style.display = "none";
                     }
@@ -260,7 +260,7 @@ export class AuthenticatedStrategy extends RunStrategy {
     ): Promise<void> => {
         try {
             await page.evaluate((selector) => {
-                const privacyButton = Array.from(document.querySelectorAll(selector))
+                const privacyButton = Array.from(document.querySelectorAll<HTMLElement>(selector))
                     .find(e => e.innerText === 'Accept');
 
                 if (privacyButton) {

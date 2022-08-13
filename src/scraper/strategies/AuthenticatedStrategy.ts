@@ -9,7 +9,7 @@ import { logger } from "../../logger/logger";
 import { urls } from "../constants";
 
 export const selectors = {
-    container: '.jobs-search-two-pane__results',
+    container: '.jobs-search-results-list',
     chatPanel: '.msg-overlay-list-bubble',
     jobs: 'div.job-card-container',
     link: 'a.job-card-container__link',
@@ -535,7 +535,9 @@ export class AuthenticatedStrategy extends RunStrategy {
 
                                 // The first not attached target should be the apply page
                                 if (targetsResponse.targetInfos && targetsResponse.targetInfos.length > 1) {
-                                    const applyTarget = targetsResponse.targetInfos.find(e => !e.attached);
+                                    const applyTarget = targetsResponse.targetInfos
+                                        .filter(e => e.type === 'page')
+                                        .find(e => !e.attached);
 
                                     if (applyTarget) {
                                         jobApplyLink = applyTarget.url;

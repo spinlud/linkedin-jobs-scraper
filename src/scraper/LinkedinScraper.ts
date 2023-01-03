@@ -228,6 +228,7 @@ class LinkedinScraper extends Scraper {
                     const toBlock = [
                         'li/track',
                         'realtime.www.linkedin.com/realtime',
+                        'platform.linkedin.com/litms/utag/voyager-web-jobs',
                     ];
 
                     if (toBlock.some(e => url.pathname.includes(e))) {

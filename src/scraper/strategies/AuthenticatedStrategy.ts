@@ -274,6 +274,65 @@ export class AuthenticatedStrategy extends RunStrategy {
     };
 
     /**
+     * Try extracting apply link
+     * @param {Page} page
+     * @param {CDPSession} cdpSession
+     * @param {string} tag
+     * @param {number} timeout
+     * @returns {Promise<{ success: boolean, url?: string, error?: string | Error }>}
+     */
+    private static _extractApplyLink = async (
+        page: Page,
+        cdpSession: CDPSession,
+        tag: string,
+        timeout = 4,
+    ): Promise<{ success: boolean, url?: string, error?: string | Error }> => {
+        try {
+            logger.debug(tag, 'Try extracting apply link');
+            const currentUrl = page.url();
+            const elapsed = 0;
+            const sleepTimeMs = 100;
+
+            if (await page.evaluate((applyBtnSelector: string) => {
+                const applyBtn = document.querySelector(applyBtnSelector) as HTMLButtonElement;
+
+                if (applyBtn) {
+                    applyBtn.click();
+                    return true;
+                }
+
+                return false;
+            }, selectors.applyBtn)) {
+
+                while (elapsed < timeout) {
+                    const targetsResponse = await cdpSession.send('Target.getTargets');
+
+                    // The first target of type page with a valid url different from main page should be our guy
+                    if (targetsResponse.targetInfos && targetsResponse.targetInfos.length > 1) {
+                        for (const targetInfo of targetsResponse.targetInfos) {
+                            if (targetInfo.attached && targetInfo.type === 'page' && targetInfo.url && targetInfo.url !== currentUrl) {
+                                await cdpSession.send('Target.closeTarget', { targetId: targetInfo.targetId });
+                                return { success: true, url: targetInfo.url };
+                            }
+                        }
+                    }
+
+                    await sleep(sleepTimeMs);
+                }
+
+                return { success: false, error: 'timeout' };
+            }
+            else {
+                return { success: false, error: 'apply button not found' };
+            }
+        }
+        catch (err: any) {
+            logger.warn(tag, 'Failed to extract apply link', err);
+            return { success: false, error: err };
+        }
+    };
+
+    /**
      * Run strategy
      * @param browser
      * @param page
@@ -519,35 +578,10 @@ export class AuthenticatedStrategy extends RunStrategy {
 
                     // Apply link
                     if (query.options?.applyLink) {
-                        try {
-                            if (await page.evaluate((applyBtnSelector: string) => {
-                                const applyBtn = document.querySelector(applyBtnSelector) as HTMLButtonElement;
+                        const applyLinkRes = await AuthenticatedStrategy._extractApplyLink(page, cdpSession, tag);
 
-                                if (applyBtn) {
-                                    applyBtn.click();
-                                    return true;
-                                }
-
-                                return false;
-                            }, selectors.applyBtn)) {
-                                logger.debug(tag, 'Try extracting apply link');
-                                const targetsResponse = await cdpSession.send('Target.getTargets');
-
-                                // The first not attached target should be the apply page
-                                if (targetsResponse.targetInfos && targetsResponse.targetInfos.length > 1) {
-                                    const applyTarget = targetsResponse.targetInfos
-                                        .filter(e => e.type === 'page')
-                                        .find(e => !e.attached);
-
-                                    if (applyTarget) {
-                                        jobApplyLink = applyTarget.url;
-                                        await cdpSession.send('Target.closeTarget', { targetId: applyTarget.targetId });
-                                    }
-                                }
-                            }
-                        }
-                        catch (err) {
-                            logger.warn(tag, 'Failed to extract apply link', err);
+                        if (applyLinkRes.success) {
+                            jobApplyLink = applyLinkRes.url as string;
                         }
                     }
                 }

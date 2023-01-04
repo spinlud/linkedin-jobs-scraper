@@ -10,8 +10,7 @@
     "test-authenticated": "DEBUG=scraper:info jest authenticated.test.ts",
     "test-authenticated-mocha": "DEBUG=scraper:info mocha --timeout 300000 src/test/authenticated.test.ts",
     "test-authenticated-node": "DEBUG=scraper:info ts-node src/test/dummy.ts",
-    "test-anonymous": "DEBUG=scraper:info jest anonymous.test.ts",
-    "tmp": "ts-node src/tmp/tmp1.ts"
+    "test-anonymous": "DEBUG=scraper:info jest anonymous.test.ts"
   },
   "repository": {
     "type": "git",

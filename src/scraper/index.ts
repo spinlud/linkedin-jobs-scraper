@@ -5,7 +5,7 @@ export {
     timeFilter,
     typeFilter,
     experienceLevelFilter,
-    remoteFilter,
+    onSiteOrRemoteFilter,
 } from "./filters";
 
 export { events } from "./events";

@@ -4,7 +4,7 @@ import {
     timeFilter,
     typeFilter,
     experienceLevelFilter,
-    remoteFilter,
+    onSiteOrRemoteFilter,
 } from "./filters";
 
 export interface IQuery {
@@ -21,7 +21,7 @@ export interface IQueryOptions {
         time?: string;
         type?: string | string[];
         experience?: string | string[];
-        remote?: string;
+        onSiteOrRemote?: string | string[];
     },
     descriptionFn?: () => string;
     optimize?: boolean;
@@ -185,14 +185,20 @@ export const validateQuery = (query: IQuery): IQueryValidationError[] => {
                 }
             }
 
-            if (filters.remote) {
-                const allowed = Object.values(remoteFilter);
+            if (filters.onSiteOrRemote) {
+                const allowed = Object.values(onSiteOrRemoteFilter);
 
-                if (!allowed.includes(filters.remote)) {
-                    errors.push({
-                        param: "options.filters.remote",
-                        reason: `Must be one of ${allowed.join(", ")}`
-                    });
+                if (!Array.isArray(filters.onSiteOrRemote)) {
+                    filters.onSiteOrRemote = [filters.onSiteOrRemote];
+                }
+
+                for (const t of filters.onSiteOrRemote) {
+                    if (!allowed.includes(t)) {
+                        errors.push({
+                            param: "options.filters.onSiteOrRemote",
+                            reason: `Must be one of ${allowed.join(", ")}`
+                        });
+                    }
                 }
             }
         }

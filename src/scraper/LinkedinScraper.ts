@@ -131,8 +131,12 @@ class LinkedinScraper extends Scraper {
                 url.searchParams.append("f_E", options.filters.experience.join(","));
             }
 
-            if (options.filters.remote && config.LI_AT_COOKIE) {
-                url.searchParams.append("f_WRA", options.filters.remote);
+            if (options.filters.onSiteOrRemote) {
+                if (!Array.isArray(options.filters.onSiteOrRemote)) {
+                    options.filters.onSiteOrRemote = [options.filters.onSiteOrRemote]
+                }
+
+                url.searchParams.append("f_WT", options.filters.onSiteOrRemote.join(","));
             }
         }
 

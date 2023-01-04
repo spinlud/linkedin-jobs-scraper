@@ -7,6 +7,7 @@ import {
     timeFilter,
     relevanceFilter,
     experienceLevelFilter,
+    onSiteOrRemoteFilter,
     events,
 } from "../index";
 
@@ -69,6 +70,7 @@ describe('[TEST]', () => {
                 filters: {
                     companyJobsUrl: "https://www.linkedin.com/jobs/search/?f_C=1441%2C10667&geoId=101165590&keywords=engineer&location=United%20Kingdom",
                     experience: [experienceLevelFilter.MID_SENIOR, experienceLevelFilter.DIRECTOR],
+                    onSiteOrRemote: onSiteOrRemoteFilter.HYBRID,
                 },
             }
         },

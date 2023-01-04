@@ -46,6 +46,7 @@ const {
     timeFilter,
     typeFilter,
     experienceLevelFilter,
+    onSiteOrRemoteFilter,
     events,
 } = require("linkedin-jobs-scraper");
 
@@ -110,7 +111,8 @@ const {
                 options: {
                     locations: ["United States"], // This will override global options ["Europe"]
                     filters: {
-                        type: [typeFilter.FULL_TIME, typeFilter.CONTRACT]    
+                        type: [typeFilter.FULL_TIME, typeFilter.CONTRACT],
+                        onSiteOrRemote: [onSiteOrRemoteFilter.REMOTE, onSiteOrRemoteFilter.HYBRID],
                     },       
                 }                                                       
             },
@@ -222,42 +224,44 @@ It is possible to customize queries with the following filters:
     * `ASSOCIATE`
     * `MID_SENIOR`
     * `DIRECTOR`
-- REMOTE:
-    * `REMOTE` (supported only with authenticated session)
+- ON SITE OR REMOTE:
+    * `ON_SITE`
+    * `REMOTE`
+    * `HYBRID`
     
 See the following example for more details:
 
 ```js
-const { 
-    LinkedinScraper,
-    relevanceFilter,
-    timeFilter,
-    typeFilter,
-    experienceLevelFilter,
-    remoteFilter,
-    events,
+const {
+  LinkedinScraper,
+  relevanceFilter,
+  timeFilter,
+  typeFilter,
+  experienceLevelFilter,
+  onSiteOrRemoteFilter,
+  events,
 } = require("linkedin-jobs-scraper");
 
 (async () => {
-    // [...]
-    
-    await scraper.run({
-            query: "",
-            options: {
-                filters: {                    
-                    relevance: relevanceFilter.RELEVANT,
-                    time: timeFilter.MONTH,
-                    type: [typeFilter.FULL_TIME, typeFilter.CONTRACT], // string or array
-                    experience: [experienceLevelFilter.ENTRY_LEVEL, experienceLevelFilter.MID_SENIOR], // string or array
-                    remote: remoteFilter.REMOTE, // supported only with authenticated session
-                }
-            }
-        }, {         
-            locations: ["United States"],
-            limit: 10,
-        });
+  // [...]
 
-    // [...]
+  await scraper.run({
+    query: "",
+    options: {
+      filters: {
+        relevance: relevanceFilter.RELEVANT,
+        time: timeFilter.MONTH,
+        type: [typeFilter.FULL_TIME, typeFilter.CONTRACT],
+        experience: [experienceLevelFilter.ENTRY_LEVEL, experienceLevelFilter.MID_SENIOR],
+        onSiteOrRemote: [onSiteOrRemoteFilter.REMOTE, onSiteOrRemoteFilter.HYBRID],
+      }
+    }
+  }, {
+    locations: ["United States"],
+    limit: 10,
+  });
+
+  // [...]
 })();
 ```
 

@@ -31,6 +31,8 @@ export const experienceLevelFilter = {
     EXECUTIVE: "6",
 }
 
-export const remoteFilter = {
-    REMOTE: "true"
+export const onSiteOrRemoteFilter = {
+    ON_SITE: "1",
+    REMOTE: "2",
+    HYBRID: "3",
 }

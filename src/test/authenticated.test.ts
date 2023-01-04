@@ -111,7 +111,7 @@ describe('[TEST]', () => {
         expect(process.env.LI_AT_COOKIE!.length).toBeGreaterThan(0);
 
         scraper.on(events.scraper.data, onDataFn);
-        scraper.on(events.scraper.invalidSession, () => { console.error("Invalid session!") });
+        scraper.on(events.scraper.invalidSession, () => { console.error("Invalid session!"); process.exit(1); });
         scraper.on(events.scraper.error, (err) => { console.error(err) });
         scraper.on(events.scraper.end, () => console.log("\nE N D (ツ)_.\\m/"));
 

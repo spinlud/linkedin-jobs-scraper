@@ -58,24 +58,25 @@ describe('[TEST]', () => {
             "--remote-debugging-address=0.0.0.0",
             "--remote-debugging-port=9222",
         ],
-        slowMo: 200,
-    });
-
-    afterEach(async () => {
-        // Necessary to avoid Jest error: `ReferenceError: You are trying to `import` a file after the Jest environment has been torn down.`
-        await sleep(2000);
+        slowMo: 250,
     });
 
     const queriesSerial1: IQuery[] = [
         {
             query: '',
+            options: {
+                locations: ['United States'],
+                filters: {
+                    companyJobsUrl: "https://www.linkedin.com/jobs/search/?f_C=1441%2C10667&geoId=101165590&keywords=engineer&location=United%20Kingdom",
+                    experience: [experienceLevelFilter.MID_SENIOR, experienceLevelFilter.DIRECTOR],
+                },
+            }
         },
         {
             query: "c#",
             options: {
                 locations: ['Finland'],
-                optimize: true,
-                limit: 33,
+                limit: 27,
                 descriptionFn,
                 filters: {
                     time: timeFilter.WEEK,
@@ -84,13 +85,12 @@ describe('[TEST]', () => {
             },
         },
         {
-            query: 'Engineer',
+            query: 'Product Manager',
             options: {
-                locations: ['United States'],
-                limit: 27,
-                filters: {
-                    companyJobsUrl: "https://www.linkedin.com/jobs/search/?f_C=1441%2C10667&geoId=101165590&keywords=engineer&location=United%20Kingdom",
-                },
+                locations: ['Germany'],
+                limit: 13,
+                applyLink: true,
+                skipPromotedJobs: true,
             },
         },
     ];

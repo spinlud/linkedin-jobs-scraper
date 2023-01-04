@@ -24,6 +24,7 @@ export interface IMetrics {
     processed: number;  // Number of successfully processed jobs
     failed: number;  // Number of jobs failed to process (because of an error)
     missed: number; // Number of missed jobs to load during scraping
+    skipped: number; // Skipped jobs
 }
 
 interface IEvents {

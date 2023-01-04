@@ -118,7 +118,8 @@ const {
                 query: "Sales",
                 options: {                    
                     limit: 10, // This will override global option limit (33)
-                    applyLink: false, // Try to extract apply link. Default to true.
+                    applyLink: true, // Try to extract apply link. If set to true, scraping is slower because an additional page mus be navigated. Default to false
+                    skipPromotedjobs: true, // Skip promoted jobs: Default to false
                     descriptionFn: descriptionFn, // Custom job description processor
                 }
             },

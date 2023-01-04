@@ -193,6 +193,10 @@ class LinkedinScraper extends Scraper {
 
         // Queries loop
         for (const query of queries) {
+            if (query.options?.optimize) {
+                logger.warn('Query option optimize=true: this could cause issues in jobs loading or pagination');
+            }
+
             // Locations loop
             for (const location of query.options!.locations!) {
                 tag = `[${query.query}][${location}]`;

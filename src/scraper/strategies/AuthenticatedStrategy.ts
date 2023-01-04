@@ -355,6 +355,7 @@ export class AuthenticatedStrategy extends RunStrategy {
             processed: 0,
             failed: 0,
             missed: 0,
+            skipped: 0,
         };
 
         let paginationIndex = 0;
@@ -442,6 +443,7 @@ export class AuthenticatedStrategy extends RunStrategy {
                 let jobDate;
                 let loadDetailsResult;
                 let jobInsights;
+                let jobIsPromoted = false;
 
                 try {
                     // Extract job main fields
@@ -498,6 +500,9 @@ export class AuthenticatedStrategy extends RunStrategy {
                             const date = job.querySelector(dateSelector) ?
                                 (<HTMLElement>job.querySelector(dateSelector)).getAttribute('datetime') : "";
 
+                            const isPromoted = !!(Array.from(job.querySelectorAll('li'))
+                                .find(e => e.innerText === 'Promoted'));
+
                             return {
                                 jobId,
                                 jobLink,
@@ -507,6 +512,7 @@ export class AuthenticatedStrategy extends RunStrategy {
                                 companyImgLink,
                                 place,
                                 date,
+                                isPromoted,
                             };
                         },
                         selectors.jobs,
@@ -526,6 +532,29 @@ export class AuthenticatedStrategy extends RunStrategy {
                     jobCompanyImgLink = jobFieldsResult.companyImgLink;
                     jobPlace = jobFieldsResult.place;
                     jobDate = jobFieldsResult.date;
+                    jobIsPromoted = jobFieldsResult.isPromoted;
+
+                    // Promoted job
+                    if (query.options?.skipPromotedJobs && jobIsPromoted) {
+                        logger.info(tag, 'Skipped because promoted');
+                        metrics.skipped += 1;
+                        jobIndex += 1;
+
+                        if (metrics.processed < query.options!.limit! && jobIndex === jobsTot && jobsTot < paginationSize) {
+                            const loadJobsResult = await AuthenticatedStrategy._loadJobs(page, jobsTot);
+
+                            if (loadJobsResult.success) {
+                                jobsTot = loadJobsResult.count;
+                            }
+                        }
+
+                        if (jobIndex === jobsTot) {
+                            break;
+                        }
+                        else {
+                            continue;
+                        }
+                    }
 
                     // Try to load job details and extract job link
                     logger.debug(tag, 'Evaluating selectors', [
@@ -616,6 +645,7 @@ export class AuthenticatedStrategy extends RunStrategy {
                 metrics.processed += 1;
                 logger.info(tag, `Processed`);
 
+                // Try fetching more jobs
                 if (metrics.processed < query.options!.limit! && jobIndex === jobsTot && jobsTot < paginationSize) {
                     const loadJobsResult = await AuthenticatedStrategy._loadJobs(page, jobsTot);
 

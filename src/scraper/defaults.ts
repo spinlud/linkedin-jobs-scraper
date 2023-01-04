@@ -37,7 +37,8 @@ const queryOptionsDefault: IQueryOptions = {
     locations: [],
     limit: 25,
     optimize: false,
-    applyLink: true,
+    applyLink: false,
+    skipPromotedJobs: false,
 };
 
 export { browserDefaults, queryOptionsDefault };

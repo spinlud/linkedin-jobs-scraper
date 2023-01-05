@@ -1,5 +1,7 @@
 export { LinkedinScraper } from "./LinkedinScraper";
 
+export { events } from "./events";
+
 export {
     relevanceFilter,
     timeFilter,
@@ -8,4 +10,4 @@ export {
     onSiteOrRemoteFilter,
 } from "./filters";
 
-export { events } from "./events";
+

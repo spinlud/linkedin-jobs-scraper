@@ -39,8 +39,8 @@ npm install --save linkedin-jobs-scraper
 
 
 ## Usage 
-```js
-const { 
+```ts
+import { 
     LinkedinScraper,
     relevanceFilter,
     timeFilter,
@@ -48,7 +48,7 @@ const {
     experienceLevelFilter,
     onSiteOrRemoteFilter,
     events,
-} = require("linkedin-jobs-scraper");
+} from 'linkedin-jobs-scraper';
 
 (async () => {
     // Each scraper instance is associated with one browser.
@@ -97,10 +97,10 @@ const {
     });
 
     // Custom function executed on browser side to extract job description [optional]
-    const descriptionFn = () => document.querySelector(".jobs-description")
-        .innerText
-        .replace(/[\s\n\r]+/g, " ")
-        .trim();
+    const descriptionFn = () => {
+        const description = document.querySelector<HTMLElement>(".jobs-description");
+        return description ? description.innerText.replace(/[\s\n\r]+/g, " ").trim() : "N/A";
+    }
 
     // Run queries concurrently    
     await Promise.all([
@@ -121,8 +121,8 @@ const {
                 options: {                    
                     limit: 10, // This will override global option limit (33)
                     applyLink: true, // Try to extract apply link. If set to true, scraping is slower because an additional page mus be navigated. Default to false
-                    skipPromotedjobs: true, // Skip promoted jobs: Default to false
-                    descriptionFn: descriptionFn, // Custom job description processor
+                    skipPromotedJobs: true, // Skip promoted jobs: Default to false
+                    descriptionFn: descriptionFn, // Custom job description processor [optional]
                 }
             },
         ], { // Global options, will be merged individually with each query options
@@ -231,8 +231,8 @@ It is possible to customize queries with the following filters:
     
 See the following example for more details:
 
-```js
-const {
+```ts
+import {
   LinkedinScraper,
   relevanceFilter,
   timeFilter,
@@ -240,7 +240,7 @@ const {
   experienceLevelFilter,
   onSiteOrRemoteFilter,
   events,
-} = require("linkedin-jobs-scraper");
+} from "linkedin-jobs-scraper";
 
 (async () => {
   // [...]

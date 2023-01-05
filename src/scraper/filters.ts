@@ -1,5 +1,3 @@
-import { config } from "../config";
-
 export const relevanceFilter = {
     RELEVANT: "R",
     RECENT: "DD",

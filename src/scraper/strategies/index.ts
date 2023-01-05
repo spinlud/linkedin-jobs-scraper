@@ -1,3 +1,3 @@
 export { RunStrategy } from "./RunStrategy";
-export { AuthenticatedStrategy } from "./AuthenticatedStrategy";
-export { AnonymousStrategy } from "./AnonymousStrategy";
+export { AuthenticatedStrategy, selectors } from "./AuthenticatedStrategy";
+export { AnonymousStrategy,  } from "./AnonymousStrategy";

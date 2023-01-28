@@ -15,8 +15,7 @@ export const selectors = {
     link: 'a.job-card-container__link',
     applyBtn: 'button.jobs-apply-button[role="link"]',
     title: '.artdeco-entity-lockup__title',
-    company: '.artdeco-entity-lockup__subtitle',
-    companyLink: 'a.job-card-container__company-name',
+    company: '.job-card-container__company-name',
     place: '.artdeco-entity-lockup__caption',
     date: 'time',
     description: '.jobs-description',
@@ -450,6 +449,7 @@ export class AuthenticatedStrategy extends RunStrategy {
                     logger.debug(tag, 'Evaluating selectors', [
                         selectors.jobs,
                         selectors.link,
+                        selectors.title,
                         selectors.company,
                         selectors.place,
                         selectors.date,
@@ -460,7 +460,7 @@ export class AuthenticatedStrategy extends RunStrategy {
                             jobsSelector: string,
                             linkSelector: string,
                             titleSelector: string,
-                            companyLinkSelector: string,
+                            companySelector: string,
                             placeSelector: string,
                             dateSelector: string,
                             jobIndex: number
@@ -485,11 +485,11 @@ export class AuthenticatedStrategy extends RunStrategy {
                             let company = "";
                             let companyLink = undefined;
 
-                            if (job.querySelector(companyLinkSelector)) {
-                                const companyLinkElem = job.querySelector(companyLinkSelector) as HTMLElement;
-                                company = companyLinkElem.innerText.trim();
-                                companyLink = companyLinkElem.getAttribute("href") ?
-                                    `${protocol}${hostname}${companyLinkElem.getAttribute("href")}` : undefined;
+                            if (job.querySelector(companySelector)) {
+                                let companyElem = job.querySelector<HTMLElement>(companySelector)!;
+                                company = companyElem.innerText;
+                                companyLink = companyElem.getAttribute("href") ?
+                                    `${protocol}${hostname}${companyElem.getAttribute("href")}` : undefined;
                             }
 
                             const companyImgLink = (<HTMLElement>job.querySelector("img"))?.getAttribute("src") ?? undefined;
@@ -518,7 +518,7 @@ export class AuthenticatedStrategy extends RunStrategy {
                         selectors.jobs,
                         selectors.link,
                         selectors.title,
-                        selectors.companyLink,
+                        selectors.company,
                         selectors.place,
                         selectors.date,
                         jobIndex

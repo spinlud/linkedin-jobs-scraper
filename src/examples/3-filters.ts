@@ -17,7 +17,11 @@ import {
 
     // Add listeners for scraper events
     scraper.on(events.scraper.data, (data) => {
-        console.log(data.company, data.title);
+        console.log(
+            `Title: ${data.title} \n
+            Company: ${data.company} \n
+            filters ${data?.options?.filters ? JSON.stringify(data.options.filters) : ""}`
+        );
     });
 
     await scraper.run({
@@ -29,7 +33,7 @@ import {
                 relevance: relevanceFilter.RELEVANT,
                 time: timeFilter.MONTH,
                 // type: typeFilter.FULL_TIME,
-                // experience: experienceLevelFilter.MID_SENIOR,
+                experience: experienceLevelFilter.MID_SENIOR,
             }
         }
     }, {

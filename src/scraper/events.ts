@@ -1,4 +1,5 @@
 import { EventMap } from 'typed-emitter';
+import { IQueryOptions } from './query';
 
 type BrowserEvent = "disconnected" | "targetchanged" | "targetcreated" | "targetdestroyed";
 
@@ -18,6 +19,7 @@ export interface IData {
     description: string;
     descriptionHTML: string;
     insights: string[];
+    options?: IQueryOptions;
 }
 
 export interface IMetrics {

@@ -433,6 +433,7 @@ export class AnonymousStrategy extends RunStrategy {
                     descriptionHTML: jobDescriptionHTML! as string,
                     date: jobDate!,
                     insights: [],
+                    options: query.options
                 });
 
                 jobIndex += 1;

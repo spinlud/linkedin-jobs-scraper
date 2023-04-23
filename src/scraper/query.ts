@@ -14,6 +14,7 @@ export interface IQuery {
 
 export interface IQueryOptions {
     locations?: string[];
+    pageOffset?: number;
     limit?: number;
     filters?: {
         companyJobsUrl?: string;
@@ -54,6 +55,7 @@ export const validateQuery = (query: IQuery): IQueryValidationError[] => {
             locations,
             filters,
             descriptionFn,
+            pageOffset,
             limit,
         } = query.options;
 
@@ -89,6 +91,13 @@ export const validateQuery = (query: IQuery): IQueryValidationError[] => {
             errors.push({
                 param: "options.skipPromotedJobs",
                 reason: `Must be a boolean`
+            });
+        }
+
+        if (pageOffset && (!Number.isInteger(pageOffset) || pageOffset <= 0)) {
+            errors.push({
+                param: "options.pageOffset",
+                reason: `Must be a positive integer`
             });
         }
 

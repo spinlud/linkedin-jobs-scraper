@@ -298,7 +298,7 @@ class LinkedinScraper extends Scraper {
                     cdpSession,
                     searchUrl,
                     query,
-                    location
+                    location,
                 );
 
                 // Check if forced exit is required

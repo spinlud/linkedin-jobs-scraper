@@ -34,7 +34,6 @@ export const selectors = {
  * @extends RunStrategy
  */
 export class AuthenticatedStrategy extends RunStrategy {
-
     /**
      * Check if session is authenticated
      * @param {Page} page
@@ -357,7 +356,7 @@ export class AuthenticatedStrategy extends RunStrategy {
             skipped: 0,
         };
 
-        let paginationIndex = 0;
+        let paginationIndex = query.options?.pageOffset || 0;
         let paginationSize = 25;
 
         // Navigate to home page
@@ -374,6 +373,11 @@ export class AuthenticatedStrategy extends RunStrategy {
             value: config.LI_AT_COOKIE!,
             domain: ".www.linkedin.com"
         });
+
+        // Override start by the page offset
+        const _url = new URL(url);
+        _url.searchParams.set('start', `${paginationIndex * paginationSize}`);
+        url = _url.href;
 
         // Open search url
         logger.info(tag, "Opening", url);

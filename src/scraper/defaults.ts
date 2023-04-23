@@ -35,6 +35,7 @@ const browserDefaults: ScraperOptions = {
 
 const queryOptionsDefault: IQueryOptions = {
     locations: [],
+    pageOffset: 0,
     limit: 25,
     optimize: false,
     applyLink: false,

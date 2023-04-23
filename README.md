@@ -118,7 +118,8 @@ import {
             },
             {
                 query: "Sales",
-                options: {                    
+                options: {           
+					pageOffset: 2, // How many pages to skip. Default 0
                     limit: 10, // This will override global option limit (33)
                     applyLink: true, // Try to extract apply link. If set to true, scraping is slower because an additional page mus be navigated. Default to false
                     skipPromotedJobs: true, // Skip promoted jobs: Default to false

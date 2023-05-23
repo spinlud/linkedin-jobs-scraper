@@ -54,7 +54,7 @@ describe('[TEST]', () => {
         .trim();
 
     const scraper = new LinkedinScraper({
-        headless: true,
+        headless: 'new',
         args: [
             "--remote-debugging-address=0.0.0.0",
             "--remote-debugging-port=9222",

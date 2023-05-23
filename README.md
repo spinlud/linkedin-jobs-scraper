@@ -54,7 +54,7 @@ import {
     // Each scraper instance is associated with one browser.
     // Concurrent queries will run on different pages within the same browser instance.
     const scraper = new LinkedinScraper({
-        headless: true,
+        headless: 'new',
         slowMo: 200,
         args: [
             "--lang=en-GB",
@@ -189,7 +189,7 @@ Example:
 
 ```js
 const scraper = new LinkedinScraper({
-    headless: true,
+    headless: 'new',
     slowMo: 200,
     args: [
         "--lang=en-GB",

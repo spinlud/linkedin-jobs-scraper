@@ -86,10 +86,10 @@ describe('[TEST]', () => {
             },
         },
         {
-            query: 'Product Manager',
+            query: 'Analyst',
             options: {
                 locations: ['Germany'],
-                limit: 7,
+                limit: 3,
                 applyLink: true,
                 skipPromotedJobs: true,
             },

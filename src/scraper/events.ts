@@ -18,6 +18,7 @@ export interface IData {
     description: string;
     descriptionHTML: string;
     insights: string[];
+    skills?: string[];
 }
 
 export interface IMetrics {

@@ -40,6 +40,7 @@ const queryOptionsDefault: IQueryOptions = {
     optimize: false,
     applyLink: false,
     skipPromotedJobs: false,
+    skills: false,
 };
 
 export { browserDefaults, queryOptionsDefault };

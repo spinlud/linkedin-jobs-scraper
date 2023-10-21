@@ -33,6 +33,14 @@ describe('[TEST]', () => {
         expect(data.description.length).toBeGreaterThan(0);
         expect(data.descriptionHTML.length).toBeGreaterThan(0);
 
+        if (data.insights) {
+            expect(Array.isArray(data.insights)).toBe(true);
+        }
+
+        if (data.skills) {
+            expect(Array.isArray(data.skills)).toBe(true);
+        }
+
         expect(() => new URL(data.link)).not.toThrow();
 
         if (data.applyLink) {
@@ -46,6 +54,7 @@ describe('[TEST]', () => {
         if (data.companyImgLink) {
             expect(() => new URL(data.companyImgLink!)).not.toThrow();
         }
+
     };
 
     const descriptionFn = () => (<HTMLElement>document.querySelector(".jobs-description")!)
@@ -54,7 +63,7 @@ describe('[TEST]', () => {
         .trim();
 
     const scraper = new LinkedinScraper({
-        headless: true,
+        headless: 'new',
         args: [
             "--remote-debugging-address=0.0.0.0",
             "--remote-debugging-port=9222",
@@ -70,6 +79,7 @@ describe('[TEST]', () => {
                     companyJobsUrl: "https://www.linkedin.com/jobs/search/?f_C=1441%2C10667&geoId=101165590&keywords=engineer&location=United%20Kingdom",
                     experience: [experienceLevelFilter.MID_SENIOR, experienceLevelFilter.DIRECTOR],
                 },
+                skills: true,
             }
         },
         {
@@ -97,7 +107,7 @@ describe('[TEST]', () => {
     ];
 
     const globalOptions: IQueryOptions = {
-        limit: 10,
+        limit: 5,
         locations: ['United Kingdom'],
         filters: {
             time: timeFilter.MONTH,

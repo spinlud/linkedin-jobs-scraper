@@ -123,6 +123,7 @@ import {
                     limit: 10, // This will override global option limit (33)
                     applyLink: true, // Try to extract apply link. If set to true, scraping is slower because an additional page mus be navigated. Default to false
                     skipPromotedJobs: true, // Skip promoted jobs: Default to false
+                    skills: true, // Extract required skills for this job. If enabled execution can be slower. Default to false.
                     descriptionFn: descriptionFn, // Custom job description processor [optional]
                 }
             },
@@ -203,32 +204,53 @@ await Promise.all([
 ]);
 ```
 
-
 ## Filters
+
 It is possible to customize queries with the following filters:
+
 - RELEVANCE:
-    * `RELEVANT`
-    * `RECENT`
+  * `RELEVANT`
+  * `RECENT`
 - TIME:
-    * `DAY`
-    * `WEEK`
-    * `MONTH`
-    * `ANY`
+  * `DAY`
+  * `WEEK`
+  * `MONTH`
+  * `ANY`
 - TYPE:
-    * `FULL_TIME`
-    * `PART_TIME`
-    * `TEMPORARY`
-    * `CONTRACT`
+  * `FULL_TIME`
+  * `PART_TIME`
+  * `TEMPORARY`
+  * `CONTRACT`
 - EXPERIENCE LEVEL:
-    * `INTERNSHIP`
-    * `ENTRY_LEVEL`
-    * `ASSOCIATE`
-    * `MID_SENIOR`
-    * `DIRECTOR`
+  * `INTERNSHIP`
+  * `ENTRY_LEVEL`
+  * `ASSOCIATE`
+  * `MID_SENIOR`
+  * `DIRECTOR`
 - ON SITE OR REMOTE:
-    * `ON_SITE`
-    * `REMOTE`
-    * `HYBRID`
+  * `ON_SITE`
+  * `REMOTE`
+  * `HYBRID`
+- INDUSTRY:
+  * `AIRLINES_AVIATION`
+  * `BANKING`
+  * `CIVIL_ENGINEERING`
+  * `COMPUTER_GAMES`
+  * `ENVIRONMENTAL_SERVICES`
+  * `ELECTRONIC_MANUFACTURING`
+  * `FINANCIAL_SERVICES`
+  * `INFORMATION_SERVICES`
+  * `INVESTMENT_BANKING`
+  * `INVESTMENT_MANAGEMENT`
+  * `IT_SERVICES`
+  * `LEGAL_SERVICES`
+  * `MOTOR_VEHICLES`
+  * `OIL_GAS`
+  * `SOFTWARE_DEVELOPMENT`
+  * `STAFFING_RECRUITING`
+  * `TECHNOLOGY_INTERNET`
+- COMPANY:
+  * See below
     
 See the following example for more details:
 
@@ -240,6 +262,7 @@ import {
   typeFilter,
   experienceLevelFilter,
   onSiteOrRemoteFilter,
+  industryFilter,      
   events,
 } from "linkedin-jobs-scraper";
 
@@ -247,7 +270,7 @@ import {
   // [...]
 
   await scraper.run({
-    query: "",
+    query: "Software Engineer",
     options: {
       filters: {
         relevance: relevanceFilter.RELEVANT,
@@ -255,11 +278,9 @@ import {
         type: [typeFilter.FULL_TIME, typeFilter.CONTRACT],
         experience: [experienceLevelFilter.ENTRY_LEVEL, experienceLevelFilter.MID_SENIOR],
         onSiteOrRemote: [onSiteOrRemoteFilter.REMOTE, onSiteOrRemoteFilter.HYBRID],
+        industry: [industryFilter.IT_SERVICES]
       }
     }
-  }, {
-    locations: ["United States"],
-    limit: 10,
   });
 
   // [...]

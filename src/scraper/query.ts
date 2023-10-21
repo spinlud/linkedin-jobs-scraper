@@ -5,6 +5,7 @@ import {
     typeFilter,
     experienceLevelFilter,
     onSiteOrRemoteFilter,
+    industryFilter,
 } from "./filters";
 
 export interface IQuery {
@@ -23,11 +24,13 @@ export interface IQueryOptions {
         type?: string | string[];
         experience?: string | string[];
         onSiteOrRemote?: string | string[];
+        industry?: string | string[];
     },
     descriptionFn?: () => string;
     optimize?: boolean;
     applyLink?: boolean;
     skipPromotedJobs?: boolean;
+    skills?: boolean;
 }
 
 export interface IQueryValidationError {
@@ -90,6 +93,13 @@ export const validateQuery = (query: IQuery): IQueryValidationError[] => {
         if (query.options.hasOwnProperty("skipPromotedJobs") && typeof(query.options.skipPromotedJobs) !== "boolean") {
             errors.push({
                 param: "options.skipPromotedJobs",
+                reason: `Must be a boolean`
+            });
+        }
+
+        if (query.options.hasOwnProperty("skills") && typeof(query.options.skills) !== "boolean") {
+            errors.push({
+                param: "options.skills",
                 reason: `Must be a boolean`
             });
         }
@@ -205,6 +215,23 @@ export const validateQuery = (query: IQuery): IQueryValidationError[] => {
                     if (!allowed.includes(t)) {
                         errors.push({
                             param: "options.filters.onSiteOrRemote",
+                            reason: `Must be one of ${allowed.join(", ")}`
+                        });
+                    }
+                }
+            }
+
+            if (filters.industry) {
+                const allowed = Object.values(industryFilter);
+
+                if (!Array.isArray(filters.industry)) {
+                    filters.industry = [filters.industry];
+                }
+
+                for (const t of filters.industry) {
+                    if (!allowed.includes(t)) {
+                        errors.push({
+                            param: "options.filters.industry",
                             reason: `Must be one of ${allowed.join(", ")}`
                         });
                     }

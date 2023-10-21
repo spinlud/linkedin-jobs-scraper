@@ -7,6 +7,7 @@ import { normalizeString } from "../../utils/string";
 import { IQuery } from "../query";
 import { logger } from "../../logger/logger";
 import { urls } from "../constants";
+import debug from "debug";
 
 export const selectors = {
     container: '.jobs-search-results-list',
@@ -28,6 +29,7 @@ export const selectors = {
     privacyAcceptBtn: 'button.artdeco-global-alert__action',
     paginationNextBtn: 'li[data-test-pagination-page-btn].selected + li',
     paginationBtn: (index: number) => `li[data-test-pagination-page-btn="${index}"] button`,
+    requiredSkills: '.job-details-how-you-match__skills-item-subtitle',
 };
 
 /**
@@ -447,6 +449,7 @@ export class AuthenticatedStrategy extends RunStrategy {
                 let jobDate;
                 let loadDetailsResult;
                 let jobInsights;
+                let jobSkills;
                 let jobIsPromoted = false;
 
                 try {
@@ -599,6 +602,33 @@ export class AuthenticatedStrategy extends RunStrategy {
 
                     jobDescription = jobDescription as string;
 
+                    // Extract required skills
+                    logger.debug(tag, 'Evaluating selectors', [
+                        selectors.requiredSkills,
+                    ]);
+
+                    if (query.options?.skills) {
+                        try {
+                            await page.waitForSelector(selectors.requiredSkills, {timeout: 2000});
+
+                            jobSkills = await page.evaluate((jobSkillsSelector: string) => {
+                                const nodes = document.querySelectorAll(jobSkillsSelector);
+
+                                if (!nodes.length) {
+                                    return undefined;
+                                }
+
+                                return Array.from(nodes)
+                                    .flatMap(e => e.textContent!.split(/,|and/))
+                                    .map(e => e.replace(/[\n\r\t ]+/g, ' ').trim())
+                                    .filter(e => e.length);
+                            }, selectors.requiredSkills);
+                        }
+                        catch(err) {
+                            logger.info('Timeout loading skills selector');
+                        }
+                    }
+
                     // Extract job insights
                     logger.debug(tag, 'Evaluating selectors', [
                         selectors.insights,
@@ -644,6 +674,7 @@ export class AuthenticatedStrategy extends RunStrategy {
                     descriptionHTML: jobDescriptionHTML! as string,
                     date: jobDate!,
                     insights: jobInsights,
+                    skills: jobSkills,
                 });
 
                 jobIndex += 1;

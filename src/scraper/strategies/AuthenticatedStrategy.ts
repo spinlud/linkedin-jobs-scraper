@@ -1,6 +1,6 @@
 import { config } from "../../config";
 import { RunStrategy, IRunStrategyResult, ILoadResult } from "./RunStrategy";
-import { BrowserContext, Page, CDPSession } from "puppeteer";
+import { Browser, Page, CDPSession } from "puppeteer";
 import { events, IMetrics } from "../events";
 import { sleep } from "../../utils/utils";
 import { normalizeString } from "../../utils/string";
@@ -16,15 +16,15 @@ export const selectors = {
     link: 'a.job-card-container__link',
     applyBtn: 'button.jobs-apply-button[role="link"]',
     title: '.artdeco-entity-lockup__title',
-    // company: '.job-card-container__company-name',
     company: '.artdeco-entity-lockup__subtitle',
+    companyLink: '.job-details-jobs-unified-top-card__primary-description-container a',
     place: '.artdeco-entity-lockup__caption',
     date: 'time',
     description: '.jobs-description',
     detailsPanel: '.jobs-search__job-details--container',
     detailsTop: '.jobs-details-top-card',
     details: '.jobs-details__main-content',
-    insights: '[class="mt5 mb2"] > ul > li', // only one class
+    insights: '.job-details-jobs-unified-top-card__container--two-pane li',
     pagination: '.jobs-search-two-pane__pagination',
     privacyAcceptBtn: 'button.artdeco-global-alert__action',
     paginationNextBtn: 'li[data-test-pagination-page-btn].selected + li',
@@ -343,7 +343,7 @@ export class AuthenticatedStrategy extends RunStrategy {
      * @param location
      */
     public run = async (
-        browser: BrowserContext,
+        browser: Browser,
         page: Page,
         cdpSession: CDPSession,
         url: string,
@@ -491,13 +491,10 @@ export class AuthenticatedStrategy extends RunStrategy {
                                 (<HTMLElement>job.querySelector(titleSelector)).innerText : "";
 
                             let company = "";
-                            let companyLink = undefined;
 
                             if (job.querySelector(companySelector)) {
                                 let companyElem = job.querySelector<HTMLElement>(companySelector)!;
                                 company = companyElem.innerText;
-                                companyLink = companyElem.getAttribute("href") ?
-                                    `${protocol}${hostname}${companyElem.getAttribute("href")}` : undefined;
                             }
 
                             const companyImgLink = (<HTMLElement>job.querySelector("img"))?.getAttribute("src") ?? undefined;
@@ -516,7 +513,6 @@ export class AuthenticatedStrategy extends RunStrategy {
                                 jobLink,
                                 title,
                                 company,
-                                companyLink,
                                 companyImgLink,
                                 place,
                                 date,
@@ -536,7 +532,6 @@ export class AuthenticatedStrategy extends RunStrategy {
                     jobLink = jobFieldsResult.jobLink;
                     jobTitle = jobFieldsResult.title;
                     jobCompany = jobFieldsResult.company;
-                    jobCompanyLink = jobFieldsResult.companyLink;
                     jobCompanyImgLink = jobFieldsResult.companyImgLink;
                     jobPlace = jobFieldsResult.place;
                     jobDate = jobFieldsResult.date;
@@ -601,6 +596,18 @@ export class AuthenticatedStrategy extends RunStrategy {
                     }
 
                     jobDescription = jobDescription as string;
+
+                    // Extract company link
+                    jobCompanyLink = await page.evaluate((selector) => {
+                        const el = document.querySelector(selector);
+
+                        if (el) {
+                            return el.getAttribute("href") || '';
+                        }
+                        else {
+                            return '';
+                        }
+                    }, selectors.companyLink)
 
                     // Extract required skills
                     logger.debug(tag, 'Evaluating selectors', [

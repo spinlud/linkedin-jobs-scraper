@@ -1,4 +1,4 @@
-import { BrowserContext, Page, CDPSession } from "puppeteer";
+import { Browser, Page, CDPSession } from "puppeteer";
 import { Scraper } from "../Scraper";
 import { IQuery } from "../query";
 
@@ -14,7 +14,7 @@ export abstract class RunStrategy {
     }
 
     abstract run(
-        browser: BrowserContext,
+        browser: Browser,
         page: Page,
         cdpSession: CDPSession,
         url: string,

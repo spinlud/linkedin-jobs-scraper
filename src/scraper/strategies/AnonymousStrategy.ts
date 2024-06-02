@@ -1,5 +1,5 @@
 import { RunStrategy, IRunStrategyResult, ILoadResult } from "./RunStrategy";
-import { BrowserContext, Page, CDPSession } from "puppeteer";
+import { Browser, Page, CDPSession } from "puppeteer";
 import { events } from "../events";
 import { sleep } from "../../utils/utils";
 import { IQuery } from "../query";
@@ -220,7 +220,7 @@ export class AnonymousStrategy extends RunStrategy {
      * @param location
      */
     public run = async (
-        browser: BrowserContext,
+        browser: Browser,
         page: Page,
         cdpSession: CDPSession,
         url: string,

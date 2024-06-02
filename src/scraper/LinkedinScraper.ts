@@ -25,7 +25,7 @@ import { logger } from '../logger/logger';
 class LinkedinScraper extends Scraper {
     private _runStrategy: RunStrategy;
     private _browser: Browser | undefined = undefined;
-    private _context: BrowserContext | undefined = undefined;
+    // private _context: BrowserContext | undefined = undefined;
     private _state = states.notInitialized;
 
     /**
@@ -60,8 +60,6 @@ class LinkedinScraper extends Scraper {
 
         // Close initial browser page
         await (await this._browser.pages())[0].close();
-
-        this._context = await this._browser.createIncognitoBrowserContext();
 
         this._browser.on(events.puppeteer.browser.disconnected, () => {
             this.emit(events.puppeteer.browser.disconnected);
@@ -216,10 +214,10 @@ class LinkedinScraper extends Scraper {
                 logger.info(tag, `Query options`, query.options);
 
                 // Open new page in incognito context
-                const page = await this._context!.newPage();
+                const page = await this._browser!.newPage();
 
                 // Create Chrome Developer Tools session
-                const cdpSession = await page.target().createCDPSession();
+                const cdpSession = await page.createCDPSession();
 
                 // Disable Content Security Policy: needed for pagination to work properly in anonymous mode
                 await page.setBypassCSP(true);
@@ -230,8 +228,8 @@ class LinkedinScraper extends Scraper {
                     state: 'active',
                 });
 
-                // Set a random user agent
-                await page.setUserAgent(getRandomUserAgent());
+                // // Set a random user agent
+                // await page.setUserAgent(getRandomUserAgent());
 
                 // Enable request interception
                 await page.setRequestInterception(true);
@@ -301,7 +299,7 @@ class LinkedinScraper extends Scraper {
 
                 // Run strategy
                 const runStrategyResult = await this._runStrategy.run(
-                    this._context!,
+                    this._browser!,
                     page,
                     cdpSession,
                     searchUrl,

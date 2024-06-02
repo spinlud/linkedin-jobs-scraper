@@ -54,3 +54,15 @@ export const industryFilter = {
     STAFFING_RECRUITING: "104",
     TECHNOLOGY_INTERNET: "6",
 };
+
+export const baseSalaryFilter = {
+    SALARY_40K: '1',
+    SALARY_60K: '2',
+    SALARY_80K: '3',
+    SALARY_100K: '4',
+    SALARY_120K: '5',
+    SALARY_140K: '6',
+    SALARY_160K: '7',
+    SALARY_180K: '8',
+    SALARY_200K: '9',
+};

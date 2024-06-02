@@ -6,6 +6,7 @@ import {
     experienceLevelFilter,
     onSiteOrRemoteFilter,
     industryFilter,
+    baseSalaryFilter,
 } from "./filters";
 
 export interface IQuery {
@@ -21,6 +22,7 @@ export interface IQueryOptions {
         companyJobsUrl?: string;
         relevance?: string;
         time?: string;
+        baseSalary?: string;
         type?: string | string[];
         experience?: string | string[];
         onSiteOrRemote?: string | string[];
@@ -165,6 +167,17 @@ export const validateQuery = (query: IQuery): IQueryValidationError[] => {
                 if (!allowed.includes(filters.time)) {
                     errors.push({
                         param: "options.filters.time",
+                        reason: `Must be one of ${allowed.join(", ")}`
+                    });
+                }
+            }
+
+            if (filters.baseSalary) {
+                const allowed = Object.values(baseSalaryFilter);
+
+                if (!allowed.includes(filters.baseSalary)) {
+                    errors.push({
+                        param: "options.filters.baseSalary",
                         reason: `Must be one of ${allowed.join(", ")}`
                     });
                 }

@@ -113,6 +113,10 @@ class LinkedinScraper extends Scraper {
                 url.searchParams.append("f_TPR", options.filters.time);
             }
 
+            if (options.filters.baseSalary && options.filters.baseSalary.length) {
+                url.searchParams.append("f_SB2", options.filters.baseSalary);
+            }
+
             if (options.filters.type) {
                 if (!Array.isArray(options.filters.type)) {
                     options.filters.type = [options.filters.type]

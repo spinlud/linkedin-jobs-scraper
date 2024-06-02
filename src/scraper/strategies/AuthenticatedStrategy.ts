@@ -487,8 +487,12 @@ export class AuthenticatedStrategy extends RunStrategy {
 
                             const jobId = job.getAttribute("data-job-id");
 
-                            const title = job.querySelector(titleSelector) ?
+                            let title = job.querySelector(titleSelector) ?
                                 (<HTMLElement>job.querySelector(titleSelector)).innerText : "";
+
+                            if (title.includes('\n')) {
+                                title = title.split('\n')[1];
+                            }
 
                             let company = "";
 

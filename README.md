@@ -53,6 +53,7 @@ import {
     typeFilter,
     experienceLevelFilter,
     onSiteOrRemoteFilter,
+    baseSalaryFilter,
     events,
 } from 'linkedin-jobs-scraper';
 
@@ -119,6 +120,7 @@ import {
                     filters: {
                         type: [typeFilter.FULL_TIME, typeFilter.CONTRACT],
                         onSiteOrRemote: [onSiteOrRemoteFilter.REMOTE, onSiteOrRemoteFilter.HYBRID],
+                        baseSalary: baseSalaryFilter.SALARY_100K,
                     },       
                 }                                                       
             },
@@ -255,6 +257,16 @@ It is possible to customize queries with the following filters:
   * `SOFTWARE_DEVELOPMENT`
   * `STAFFING_RECRUITING`
   * `TECHNOLOGY_INTERNET`
+- BASE SALARY:
+  * `SALARY_40K`
+  * `SALARY_60K`
+  * `SALARY_80K`
+  * `SALARY_100K`
+  * `SALARY_120K`
+  * `SALARY_140K`
+  * `SALARY_160K`
+  * `SALARY_180K`
+  * `SALARY_200K`
 - COMPANY:
   * See below
     
@@ -268,7 +280,8 @@ import {
   typeFilter,
   experienceLevelFilter,
   onSiteOrRemoteFilter,
-  industryFilter,      
+  industryFilter,
+  baseSalaryFilter,      
   events,
 } from "linkedin-jobs-scraper";
 
@@ -284,7 +297,8 @@ import {
         type: [typeFilter.FULL_TIME, typeFilter.CONTRACT],
         experience: [experienceLevelFilter.ENTRY_LEVEL, experienceLevelFilter.MID_SENIOR],
         onSiteOrRemote: [onSiteOrRemoteFilter.REMOTE, onSiteOrRemoteFilter.HYBRID],
-        industry: [industryFilter.IT_SERVICES]
+        industry: [industryFilter.IT_SERVICES],
+        baseSalary: baseSalaryFilter.SALARY_100K,
       }
     }
   });

@@ -8,6 +8,7 @@ export {
     typeFilter,
     experienceLevelFilter,
     onSiteOrRemoteFilter,
+    baseSalaryFilter,
 } from "./filters";
 
 

@@ -432,6 +432,7 @@ export class AnonymousStrategy extends RunStrategy {
                     description: jobDescription! as string,
                     descriptionHTML: jobDescriptionHTML! as string,
                     date: jobDate!,
+                    dateText: '',
                     insights: [],
                 });
 

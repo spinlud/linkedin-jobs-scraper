@@ -1,11 +1,11 @@
 import { EventEmitter } from "events";
 import TypedEmitter from "typed-emitter";
 import { IEventListeners } from "./events";
-import { LaunchOptions, BrowserLaunchArgumentOptions, BrowserConnectOptions } from "puppeteer";
+import { LaunchOptions, ConnectOptions } from "puppeteer";
 import { IQuery, IQueryOptions } from "./query";
 import { logger } from "../logger/logger";
 
-export type ScraperOptions = LaunchOptions & BrowserLaunchArgumentOptions & BrowserConnectOptions;
+export type ScraperOptions = LaunchOptions & ConnectOptions;
 
 export abstract class Scraper extends (EventEmitter as new () => TypedEmitter<IEventListeners>) {
     public options: ScraperOptions;

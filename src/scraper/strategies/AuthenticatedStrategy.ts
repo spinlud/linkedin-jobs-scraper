@@ -10,16 +10,17 @@ import { urls } from "../constants";
 import debug from "debug";
 
 export const selectors = {
-    container: '.jobs-search-results-list',
+    container: '.scaffold-layout__list',
     chatPanel: '.msg-overlay-list-bubble',
     jobs: 'div.job-card-container',
     link: 'a.job-card-container__link',
     applyBtn: 'button.jobs-apply-button[role="link"]',
     title: '.artdeco-entity-lockup__title',
     company: '.artdeco-entity-lockup__subtitle',
-    companyLink: '.job-details-jobs-unified-top-card__primary-description-container a',
+    companyLink: '.job-details-jobs-unified-top-card__company-name a',
     place: '.artdeco-entity-lockup__caption',
     date: 'time',
+    dateText: '.job-details-jobs-unified-top-card__primary-description-container span:nth-of-type(3)',
     description: '.jobs-description',
     detailsPanel: '.jobs-search__job-details--container',
     detailsTop: '.jobs-details-top-card',
@@ -447,6 +448,7 @@ export class AuthenticatedStrategy extends RunStrategy {
                 let jobDescription;
                 let jobDescriptionHTML;
                 let jobDate;
+                let jobDateText;
                 let loadDetailsResult;
                 let jobInsights;
                 let jobSkills;
@@ -601,6 +603,18 @@ export class AuthenticatedStrategy extends RunStrategy {
 
                     jobDescription = jobDescription as string;
 
+                    // Extract date text (eg '1 week ago')
+                    jobDateText = await page.evaluate((selector) => {
+                        const el = document.querySelector(selector) as HTMLElement | null;
+
+                        if (el) {
+                            return el.innerText;
+                        }
+                        else {
+                            return '';
+                        }
+                    }, selectors.dateText);
+
                     // Extract company link
                     jobCompanyLink = await page.evaluate((selector) => {
                         const el = document.querySelector(selector);
@@ -611,7 +625,7 @@ export class AuthenticatedStrategy extends RunStrategy {
                         else {
                             return '';
                         }
-                    }, selectors.companyLink)
+                    }, selectors.companyLink);
 
                     // Extract required skills
                     logger.debug(tag, 'Evaluating selectors', [
@@ -684,6 +698,7 @@ export class AuthenticatedStrategy extends RunStrategy {
                     description: jobDescription! as string,
                     descriptionHTML: jobDescriptionHTML! as string,
                     date: jobDate!,
+                    dateText: jobDateText!,
                     insights: jobInsights,
                     skills: jobSkills,
                 });

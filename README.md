@@ -104,12 +104,6 @@ import {
         console.log('All done!');
     });
 
-    // Custom function executed on browser side to extract job description [optional]
-    const descriptionFn = () => {
-        const description = document.querySelector<HTMLElement>(".jobs-description");
-        return description ? description.innerText.replace(/[\s\n\r]+/g, " ").trim() : "N/A";
-    }
-
     // Run queries concurrently    
     await Promise.all([
         // Run queries serially

@@ -148,6 +148,10 @@ class LinkedinScraper extends Scraper {
 
                 url.searchParams.append("f_I", options.filters.industry.join(","));
             }
+
+            if (options.filters.easyApply) {
+                url.searchParams.append("f_AL", options.filters.easyApply ? "true" : "false");
+            }
         }
 
         url.searchParams.append("start", "0");

@@ -27,6 +27,7 @@ export interface IQueryOptions {
         experience?: string | string[];
         onSiteOrRemote?: string | string[];
         industry?: string | string[];
+        easyApply?: boolean;
     },
     descriptionFn?: () => string;
     optimize?: boolean;

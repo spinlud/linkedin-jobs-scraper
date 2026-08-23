@@ -3,7 +3,8 @@ import { RunStrategy, IRunStrategyResult, ILoadResult } from "./RunStrategy";
 import { Browser, Page, CDPSession } from "puppeteer";
 import { events, IMetrics } from "../events";
 import { sleep } from "../../utils/utils";
-import { normalizeString } from "../../utils/string";
+import { normalizeString, cleanApplicantCount } from "../../utils/string";
+import { parseRelativeDate } from "../../utils/dates";
 import { IQuery } from "../query";
 import { logger } from "../../logger/logger";
 import { urls } from "../constants";
@@ -18,6 +19,7 @@ export const selectors = {
     title: '.artdeco-entity-lockup__title',
     company: '.artdeco-entity-lockup__subtitle',
     companyLink: '.job-details-jobs-unified-top-card__company-name a',
+    companyEmployeeCount: '.jobs-company__box .jobs-company__inline-information',
     place: '.artdeco-entity-lockup__caption',
     date: 'time',
     dateText: '.job-details-jobs-unified-top-card__primary-description-container span:nth-of-type(3)',
@@ -26,11 +28,15 @@ export const selectors = {
     detailsTop: '.jobs-details-top-card',
     details: '.jobs-details__main-content',
     insights: '.job-details-jobs-unified-top-card__container--two-pane li',
+    fitLevelButtons: '.job-details-fit-level-preferences button',
+    salaryRailCard: '.jobs-details__salary-main-rail-card',
+    applyButton: 'button.jobs-apply-button',
+    tertiaryDescription: '.job-details-jobs-unified-top-card__tertiary-description-container',
+    benefits: '.featured-benefits__benefit',
     pagination: '.jobs-search-two-pane__pagination',
     privacyAcceptBtn: 'button.artdeco-global-alert__action',
     paginationNextBtn: 'li[data-test-pagination-page-btn].selected + li',
     paginationBtn: (index: number) => `li[data-test-pagination-page-btn="${index}"] button`,
-    requiredSkills: '.job-details-how-you-match__skills-item-subtitle',
 };
 
 /**
@@ -447,11 +453,16 @@ export class AuthenticatedStrategy extends RunStrategy {
                 let jobPlace;
                 let jobDescription;
                 let jobDescriptionHTML;
-                let jobDate;
-                let jobDateText;
+                let jobDate: string = "";
+                let jobDateText: string = "";
                 let loadDetailsResult;
                 let jobInsights;
-                let jobSkills;
+                let jobCompanyEmployeeCount: string = "";
+                let jobSalary: string = "";
+                let jobIsEasyApply: boolean = false;
+                let jobApplicantCount: string = "";
+                let jobBenefits: string[] = [];
+                let jobReposted: boolean = false;
                 let jobIsPromoted = false;
 
                 try {
@@ -540,7 +551,7 @@ export class AuthenticatedStrategy extends RunStrategy {
                     jobCompany = jobFieldsResult.company;
                     jobCompanyImgLink = jobFieldsResult.companyImgLink;
                     jobPlace = jobFieldsResult.place;
-                    jobDate = jobFieldsResult.date;
+                    jobDate = jobFieldsResult.date ?? "";
                     jobIsPromoted = jobFieldsResult.isPromoted;
 
                     // Promoted job
@@ -615,6 +626,15 @@ export class AuthenticatedStrategy extends RunStrategy {
                         }
                     }, selectors.dateText);
 
+                    // A reposted listing is flagged in the date text; the card's <time>
+                    // datetime is authoritative when present, otherwise the ISO date is
+                    // approximated from the relative date text
+                    jobReposted = /reposted/i.test(jobDateText);
+
+                    if (!jobDate) {
+                        jobDate = parseRelativeDate(jobDateText, new Date());
+                    }
+
                     // Extract company link
                     jobCompanyLink = await page.evaluate((selector) => {
                         const el = document.querySelector(selector);
@@ -627,32 +647,93 @@ export class AuthenticatedStrategy extends RunStrategy {
                         }
                     }, selectors.companyLink);
 
-                    // Extract required skills
+                    // Extract company employee count
                     logger.debug(tag, 'Evaluating selectors', [
-                        selectors.requiredSkills,
+                        selectors.companyEmployeeCount,
                     ]);
 
-                    if (query.options?.skills) {
-                        try {
-                            await page.waitForSelector(selectors.requiredSkills, {timeout: 2000});
+                    jobCompanyEmployeeCount = await page.evaluate((selector: string) => {
+                        const spans = Array.from(document.querySelectorAll<HTMLElement>(selector));
+                        const el = spans.find(e => /employee/i.test(e.innerText));
 
-                            jobSkills = await page.evaluate((jobSkillsSelector: string) => {
-                                const nodes = document.querySelectorAll(jobSkillsSelector);
-
-                                if (!nodes.length) {
-                                    return undefined;
-                                }
-
-                                return Array.from(nodes)
-                                    .flatMap(e => e.textContent!.split(/,|and/))
-                                    .map(e => e.replace(/[\n\r\t ]+/g, ' ').trim())
-                                    .filter(e => e.length);
-                            }, selectors.requiredSkills);
+                        if (el) {
+                            return el.innerText.split(' employees')[0].replace(/,/g, '').trim();
                         }
-                        catch(err) {
-                            logger.info('Timeout loading skills selector');
+
+                        return '';
+                    }, selectors.companyEmployeeCount);
+
+                    // Extract salary, easy-apply flag, applicant count and benefits
+                    logger.debug(tag, 'Evaluating selectors', [
+                        selectors.fitLevelButtons,
+                        selectors.salaryRailCard,
+                        selectors.applyButton,
+                        selectors.tertiaryDescription,
+                        selectors.benefits,
+                    ]);
+
+                    const [salary, isEasyApply, applicantCount, benefits] = await page.evaluate((
+                        fitLevelSelector: string,
+                        salaryRailSelector: string,
+                        applyButtonSelector: string,
+                        tertiarySelector: string,
+                        benefitsSelector: string,
+                    ): [string, boolean, string, string[]] => {
+                        const moneyRe = /(\$|€|£|₹)\s?\d|\/(yr|hr)\b|per (year|hour)|K\/(yr|hr)/i;
+
+                        // Prefer the first fit-level button when it reads as money, else the salary rail card
+                        const fit = Array.from(document.querySelectorAll<HTMLElement>(fitLevelSelector))
+                            .map(b => b.innerText.trim())
+                            .filter(Boolean);
+                        let salary = (fit[0] && moneyRe.test(fit[0])) ? fit[0] : '';
+
+                        if (!salary) {
+                            const card = document.querySelector<HTMLElement>(salaryRailSelector);
+
+                            if (card) {
+                                const m = card.innerText.match(/[^\n]*(?:\$|€|£|₹)[^\n]*/);
+                                if (m) salary = m[0].trim();
+                            }
                         }
-                    }
+
+                        // Easy Apply keeps the applicant on LinkedIn; the aria-label/text
+                        // discriminates it from an external apply button
+                        const applyBtn = document.querySelector<HTMLElement>(applyButtonSelector);
+                        const isEasyApply = !!applyBtn &&
+                            /easy apply/i.test(((applyBtn.getAttribute('aria-label') || '') + ' ' + (applyBtn.innerText || '')));
+
+                        // The tertiary container reads "<place> · <date> · <applicants>", any
+                        // segment may be absent, so the applicant segment is matched by shape
+                        // rather than by position
+                        let applicantCount = '';
+                        const tertiary = document.querySelector<HTMLElement>(tertiarySelector);
+
+                        if (tertiary) {
+                            const segments = tertiary.innerText
+                                .split('·')
+                                .map(e => e.replace(/[\n\r\t ]+/g, ' ').trim())
+                                .filter(e => e.length);
+
+                            applicantCount = segments.find(e => /applicant|clicked apply/i.test(e)) || '';
+                        }
+
+                        const benefits = Array.from(document.querySelectorAll<HTMLElement>(benefitsSelector))
+                            .map(e => (e.textContent || '').trim())
+                            .filter(Boolean);
+
+                        return [salary, isEasyApply, applicantCount, benefits];
+                    },
+                        selectors.fitLevelButtons,
+                        selectors.salaryRailCard,
+                        selectors.applyButton,
+                        selectors.tertiaryDescription,
+                        selectors.benefits,
+                    );
+
+                    jobSalary = normalizeString(salary);
+                    jobIsEasyApply = isEasyApply;
+                    jobApplicantCount = cleanApplicantCount(applicantCount);
+                    jobBenefits = benefits;
 
                     // Extract job insights
                     logger.debug(tag, 'Evaluating selectors', [
@@ -693,14 +774,19 @@ export class AuthenticatedStrategy extends RunStrategy {
                     title: normalizeString(jobTitle!),
                     company: normalizeString(jobCompany!),
                     companyLink: jobCompanyLink,
+                    companyEmployeeCount: jobCompanyEmployeeCount || undefined,
                     companyImgLink: jobCompanyImgLink,
                     place: normalizeString(jobPlace!),
                     description: jobDescription! as string,
                     descriptionHTML: jobDescriptionHTML! as string,
-                    date: jobDate!,
-                    dateText: jobDateText!,
+                    date: jobDate,
+                    dateText: jobDateText,
                     insights: jobInsights,
-                    skills: jobSkills,
+                    salary: jobSalary || undefined,
+                    isEasyApply: jobIsEasyApply,
+                    applicantCount: jobApplicantCount || undefined,
+                    benefits: jobBenefits.length ? jobBenefits : undefined,
+                    reposted: jobReposted,
                 });
 
                 jobIndex += 1;

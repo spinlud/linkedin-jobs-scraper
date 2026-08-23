@@ -12,14 +12,19 @@ export interface IData {
     title: string;
     company: string;
     companyLink?: string;
+    companyEmployeeCount?: string;
     companyImgLink?: string;
     place: string;
-    date: string;
-    dateText: string;
+    date: string; // ISO YYYY-MM-DD, from the <time> datetime attribute or the parsed fallback
+    dateText: string; // Raw relative posted-date text (eg '2 weeks ago')
     description: string;
     descriptionHTML: string;
     insights: string[];
-    skills?: string[];
+    salary?: string;
+    isEasyApply: boolean;
+    applicantCount?: string;
+    benefits?: string[];
+    reposted: boolean;
 }
 
 export interface IMetrics {
@@ -29,12 +34,27 @@ export interface IMetrics {
     skipped: number; // Skipped jobs
 }
 
+export interface IBegin {
+    jobTotal: number; // Approximate total result count reported by LinkedIn
+}
+
+export interface INotFound {
+    jobId: string; // Id of the job that could not be found
+}
+
+export interface ISession {
+    liAt: string; // Refreshed li_at cookie, differing from the one supplied
+}
+
 interface IEvents {
     scraper: {
         data: "scraper:data";
         error: "scraper:error";
         metrics: "scraper:metrics";
+        begin: "scraper:begin";
+        notFound: "scraper:not-found";
         invalidSession: "scraper:invalid-session",
+        sessionRefreshed: "scraper:session-refreshed";
         end: "scraper:end";
     },
     puppeteer: {
@@ -52,7 +72,10 @@ const events: IEvents = {
         data: "scraper:data",
         error: "scraper:error",
         metrics: "scraper:metrics",
+        begin: "scraper:begin",
+        notFound: "scraper:not-found",
         invalidSession: "scraper:invalid-session",
+        sessionRefreshed: "scraper:session-refreshed",
         end: "scraper:end",
     },
     puppeteer: {
@@ -69,7 +92,10 @@ export type IEventListeners = {
     ["scraper:data"]: (data: IData) => void;
     ["scraper:error"]: (error: Error | string) => void;
     ["scraper:metrics"]: (data: IMetrics) => void;
+    ["scraper:begin"]: (data: IBegin) => void;
+    ["scraper:not-found"]: (data: INotFound) => void;
     ["scraper:invalid-session"]: () => void;
+    ["scraper:session-refreshed"]: (data: ISession) => void;
     ["scraper:end"]: () => void;
     ["disconnected"]: (...args: any[]) => void;
     ["targetchanged"]: (...args: any[]) => void;

@@ -434,6 +434,8 @@ export class AnonymousStrategy extends RunStrategy {
                     date: jobDate!,
                     dateText: '',
                     insights: [],
+                    isEasyApply: false,
+                    reposted: false,
                 });
 
                 jobIndex += 1;

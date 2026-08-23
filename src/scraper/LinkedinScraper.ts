@@ -318,8 +318,29 @@ class LinkedinScraper extends Scraper {
             }
         }
 
+        // Surface a rotated session cookie before ending
+        await this._emitRefreshedSession();
+
         // Emit end event
         this.emit(events.scraper.end);
+    };
+
+    /**
+     * Report the session cookie when it no longer matches the one supplied, so a caller
+     * with no persistent Chrome profile can persist the new value for the next run.
+     * @private
+     */
+    private _emitRefreshedSession = async (): Promise<void> => {
+        if (!config.LI_AT_COOKIE || !this._browser) {
+            return;
+        }
+
+        const cookies = await this._browser.cookies();
+        const liAtCookie = cookies.find(cookie => cookie.name === "li_at");
+
+        if (liAtCookie && liAtCookie.value && liAtCookie.value !== config.LI_AT_COOKIE) {
+            this.emit(events.scraper.sessionRefreshed, { liAt: liAtCookie.value });
+        }
     };
 
     /**

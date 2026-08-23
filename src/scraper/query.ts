@@ -32,7 +32,6 @@ export interface IQueryOptions {
     optimize?: boolean;
     applyLink?: boolean;
     skipPromotedJobs?: boolean;
-    skills?: boolean;
 }
 
 export interface IQueryValidationError {
@@ -95,13 +94,6 @@ export const validateQuery = (query: IQuery): IQueryValidationError[] => {
         if (query.options.hasOwnProperty("skipPromotedJobs") && typeof(query.options.skipPromotedJobs) !== "boolean") {
             errors.push({
                 param: "options.skipPromotedJobs",
-                reason: `Must be a boolean`
-            });
-        }
-
-        if (query.options.hasOwnProperty("skills") && typeof(query.options.skills) !== "boolean") {
-            errors.push({
-                param: "options.skills",
                 reason: `Must be a boolean`
             });
         }

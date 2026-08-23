@@ -37,8 +37,8 @@ describe('[TEST]', () => {
             expect(Array.isArray(data.insights)).toBe(true);
         }
 
-        if (data.skills) {
-            expect(Array.isArray(data.skills)).toBe(true);
+        if (data.benefits) {
+            expect(Array.isArray(data.benefits)).toBe(true);
         }
 
         expect(() => new URL(data.link)).not.toThrow();
@@ -79,7 +79,6 @@ describe('[TEST]', () => {
                     companyJobsUrl: "https://www.linkedin.com/jobs/search/?f_C=1441%2C10667&geoId=101165590&keywords=engineer&location=United%20Kingdom",
                     experience: [experienceLevelFilter.MID_SENIOR, experienceLevelFilter.DIRECTOR],
                 },
-                skills: true,
             }
         },
         {

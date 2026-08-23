@@ -1,5 +1,4 @@
 import deepmerge from 'deepmerge';
-import { config } from '../config';
 import puppeteer from 'puppeteer';
 import { Browser, BrowserContext, HTTPRequest } from 'puppeteer';
 import { events, IEventListeners } from './events';
@@ -10,7 +9,8 @@ import { getQueryParams } from '../utils/url';
 import { urls, } from './constants';
 import { IQuery, IQueryOptions, validateQuery } from './query';
 import { Scraper, ScraperOptions } from './Scraper';
-import { RunStrategy, AuthenticatedStrategy, AnonymousStrategy } from './strategies';
+import { AuthenticatedStrategy } from './strategies';
+import { resolveAuthConfig, SESSION_COOKIE_NAME } from './auth';
 import { logger } from '../logger/logger';
 
 // puppeteer.use(require('puppeteer-extra-plugin-stealth')()); // TODO: breaks with new target tabs: to investigate
@@ -22,7 +22,7 @@ import { logger } from '../logger/logger';
  * @constructor
  */
 class LinkedinScraper extends Scraper {
-    private _runStrategy: RunStrategy;
+    private _runStrategy: AuthenticatedStrategy;
     private _browser: Browser | undefined = undefined;
     // private _context: BrowserContext | undefined = undefined;
     private _state = states.notInitialized;
@@ -34,14 +34,10 @@ class LinkedinScraper extends Scraper {
     constructor(options: ScraperOptions) {
         super(options);
 
-        if (config.LI_AT_COOKIE) {
-            this._runStrategy = new AuthenticatedStrategy(this);
-            logger.info(`Env variable LI_AT_COOKIE detected. Using ${AuthenticatedStrategy.name}`)
-        }
-        else {
-            this._runStrategy = new AnonymousStrategy(this);
-            logger.info(`Using ${AnonymousStrategy.name}`)
-        }
+        // Authentication is mandatory: the config resolves to a mode or throws.
+        const authConfig = resolveAuthConfig(options.auth);
+        this._runStrategy = new AuthenticatedStrategy(this, authConfig);
+        logger.info(`Using ${AuthenticatedStrategy.name} with auth mode '${authConfig.mode}'`);
     }
 
     /**
@@ -326,19 +322,26 @@ class LinkedinScraper extends Scraper {
     };
 
     /**
-     * Report the session cookie when it no longer matches the one supplied, so a caller
-     * with no persistent Chrome profile can persist the new value for the next run.
+     * Report the session cookie when it no longer matches the one in effect right after
+     * authentication, so a caller can persist the rotated value for the next run. Applies to all
+     * auth modes, since a minted or profile session can rotate just as a supplied one can.
      * @private
      */
     private _emitRefreshedSession = async (): Promise<void> => {
-        if (!config.LI_AT_COOKIE || !this._browser) {
+        if (!this._browser) {
+            return;
+        }
+
+        const initialLiAt = this._runStrategy.initialLiAt;
+
+        if (!initialLiAt) {
             return;
         }
 
         const cookies = await this._browser.cookies();
-        const liAtCookie = cookies.find(cookie => cookie.name === "li_at");
+        const liAtCookie = cookies.find(cookie => cookie.name === SESSION_COOKIE_NAME);
 
-        if (liAtCookie && liAtCookie.value && liAtCookie.value !== config.LI_AT_COOKIE) {
+        if (liAtCookie && liAtCookie.value && liAtCookie.value !== initialLiAt) {
             this.emit(events.scraper.sessionRefreshed, { liAt: liAtCookie.value });
         }
     };

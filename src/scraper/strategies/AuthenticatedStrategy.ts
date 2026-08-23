@@ -1,4 +1,3 @@
-import { config } from "../../config";
 import { RunStrategy, IRunStrategyResult, ILoadResult } from "./RunStrategy";
 import { Browser, Page, CDPSession } from "puppeteer";
 import { events, IMetrics } from "../events";
@@ -6,9 +5,21 @@ import { sleep } from "../../utils/utils";
 import { normalizeString, cleanApplicantCount } from "../../utils/string";
 import { parseRelativeDate } from "../../utils/dates";
 import { IQuery } from "../query";
+import { Scraper } from "../Scraper";
+import {
+    AuthConfig,
+    authenticate,
+    isSessionInvalid,
+    maskUserAgent,
+    SESSION_COOKIE_NAME,
+} from "../auth";
+import { InvalidCookieException } from "../exceptions";
 import { logger } from "../../logger/logger";
 import { urls } from "../constants";
 import debug from "debug";
+
+// How many times a lost session is rebuilt before the run is aborted, scoped per location.
+const MAX_SESSION_RECOVERIES = 2;
 
 export const selectors = {
     container: '.scaffold-layout__list',
@@ -44,6 +55,31 @@ export const selectors = {
  * @extends RunStrategy
  */
 export class AuthenticatedStrategy extends RunStrategy {
+    private _authConfig: AuthConfig;
+
+    // The session cookie in effect right after the first authenticate completed. A run whose
+    // ending cookie differs from this rotated its session, which the scraper reports so a caller
+    // can persist the new value.
+    private _initialLiAt: string | undefined = undefined;
+
+    /**
+     * @constructor
+     * @param {Scraper} scraper
+     * @param {AuthConfig} authConfig
+     */
+    constructor(scraper: Scraper, authConfig: AuthConfig) {
+        super(scraper);
+        this._authConfig = authConfig;
+    }
+
+    /**
+     * The session cookie established at the start of the run, or undefined before authentication.
+     * @returns {string | undefined}
+     */
+    public get initialLiAt(): string | undefined {
+        return this._initialLiAt;
+    }
+
     /**
      * Check if session is authenticated
      * @param {Page} page
@@ -54,7 +90,52 @@ export class AuthenticatedStrategy extends RunStrategy {
      */
     private static _isAuthenticatedSession = async (page: Page): Promise<boolean> => {
         const cookies = await page.browser().cookies();
-        return cookies.some(e => e.name === "li_at");
+        return cookies.some(e => e.name === SESSION_COOKIE_NAME);
+    };
+
+    /**
+     * Rebuild the session and re-open the results page. The jar is emptied of its session first,
+     * so a persistent profile's retired cookie cannot keep winning over the credentials about to
+     * be supplied.
+     * @param {Browser} browser
+     * @param {Page} page
+     * @param {string} url
+     * @param {string} tag
+     * @returns {Promise<boolean>} true if the results container rendered
+     */
+    private _reopenResults = async (
+        browser: Browser,
+        page: Page,
+        url: string,
+        tag: string,
+    ): Promise<boolean> => {
+        const staleSessionCookies = (await browser.cookies())
+            .filter(cookie => cookie.name === SESSION_COOKIE_NAME);
+
+        if (staleSessionCookies.length) {
+            try {
+                await browser.deleteCookie(...staleSessionCookies);
+            }
+            catch (err) {}
+        }
+
+        await page.goto(urls.home, { waitUntil: 'load' });
+
+        const liAt = await authenticate(browser, page, this._authConfig, tag);
+
+        if (!liAt) {
+            return false;
+        }
+
+        await page.goto(url, { waitUntil: 'load' });
+
+        try {
+            await page.waitForSelector(selectors.container, { timeout: 5000 });
+            return true;
+        }
+        catch (err) {
+            return false;
+        }
     };
 
     /**
@@ -369,6 +450,9 @@ export class AuthenticatedStrategy extends RunStrategy {
         let paginationIndex = query.options?.pageOffset || 0;
         let paginationSize = 25;
 
+        // Number of times the session has been rebuilt for this location.
+        let recoveries = 0;
+
         // Navigate to home page
         logger.debug(tag, "Opening", urls.home);
 
@@ -376,13 +460,22 @@ export class AuthenticatedStrategy extends RunStrategy {
             waitUntil: 'load',
         });
 
-        // Set cookie
-        logger.info("Setting authentication cookie");
-        await page.browser().setCookie({
-            name: "li_at",
-            value: config.LI_AT_COOKIE!,
-            domain: ".www.linkedin.com"
-        });
+        // Mask the headless User-Agent before any authenticated request carries it.
+        await maskUserAgent(page);
+
+        // Establish the session for the configured mode, minting a fresh cookie where possible.
+        const liAt = await authenticate(page.browser(), page, this._authConfig, tag);
+
+        if (!liAt) {
+            logger.error(tag, "Could not establish a session. Check the documentation on how to authenticate.");
+            this.scraper.emit(events.scraper.invalidSession);
+            throw new InvalidCookieException("Could not establish a session for the scraper.");
+        }
+
+        // The first session established is the baseline for detecting a rotation by end of run.
+        if (this._initialLiAt === undefined) {
+            this._initialLiAt = liAt;
+        }
 
         // Override start by the page offset
         const _url = new URL(url);
@@ -396,27 +489,49 @@ export class AuthenticatedStrategy extends RunStrategy {
             waitUntil: 'load',
         });
 
-        // Verify session
-        if (!(await AuthenticatedStrategy._isAuthenticatedSession(page))) {
-            logger.error("The provided session cookie is invalid. Check the documentation on how to obtain a valid session cookie.");
-            this.scraper.emit(events.scraper.invalidSession);
-            return { exit: true };
-        }
-
         try {
             await page.waitForSelector(selectors.container, { timeout: 5000 });
         }
         catch(err: any) {
-            logger.info(tag, `No jobs found, skip`);
-            return { exit: false };
+            // A missing container on a valid session is genuinely no jobs; on an invalid one the
+            // pagination loop below rebuilds the session and re-opens the page.
+            if (!(await isSessionInvalid(page))) {
+                logger.info(tag, `No jobs found, skip`);
+                return { exit: false };
+            }
         }
 
         // Pagination loop
         while (metrics.processed < query.options!.limit!) {
             // Verify session in the loop
-            if (!(await AuthenticatedStrategy._isAuthenticatedSession(page))) {
-                logger.warn(tag, "Session is invalid, this may cause the scraper to fail.");
-                this.scraper.emit(events.scraper.invalidSession);
+            if (await isSessionInvalid(page)) {
+                // A bare li_at cannot be renewed, so recovery is futile: fail fast.
+                if (this._authConfig.mode === "liAt") {
+                    logger.error(tag, "The supplied li_at session cookie was refused and cannot be renewed.");
+                    this.scraper.emit(events.scraper.invalidSession);
+                    throw new InvalidCookieException(
+                        "The supplied li_at session cookie was refused and cannot be renewed. " +
+                        "Supply a remember-me pair or an interactive-login profile to recover automatically."
+                    );
+                }
+
+                if (recoveries >= MAX_SESSION_RECOVERIES) {
+                    logger.warn(tag, `Session refused again after ${recoveries} recoveries`);
+                    this.scraper.emit(events.scraper.invalidSession);
+                    throw new InvalidCookieException(
+                        "LinkedIn refused every session available and would not issue another. " +
+                        "Check the documentation on how to obtain a valid session."
+                    );
+                }
+
+                recoveries += 1;
+                logger.warn(tag, "Session is no longer valid, rebuilding it and re-opening this page");
+
+                if (!(await this._reopenResults(page.browser(), page, url, tag))) {
+                    return { exit: false };
+                }
+
+                continue;
             }
             else {
                 logger.info(tag, "Session is valid");

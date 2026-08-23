@@ -6,7 +6,7 @@ import { events, IEventListeners } from './events';
 import { states } from './states';
 import { browserDefaults, queryOptionsDefault } from './defaults';
 import { sleep } from '../utils/utils';
-import { getQueryParams } from '../utils/url';
+import { getQueryParams, getJobId } from '../utils/url';
 import { urls, } from './constants';
 import { IQuery, IQueryOptions, validateQuery } from './query';
 import { Scraper, ScraperOptions } from './Scraper';
@@ -379,6 +379,83 @@ class LinkedinScraper extends Scraper {
         }
         catch (err: any) {
             // logger.error(err);
+            this.emit(events.scraper.error, err);
+            await this.close();
+            throw err;
+        }
+    };
+
+    /**
+     * Scrape a single job by its url or id, bypassing search and pagination
+     * @param {string} urlOrId a numeric id, a '/jobs/view/<id>' url or a '?currentJobId=<id>' url
+     * @param {{ applyLink?: boolean }} [options]
+     * @return {Promise<void>}
+     */
+    public scrapeJob = async (
+        urlOrId: string,
+        options?: { applyLink?: boolean }
+    ): Promise<void> => {
+        // Resolve the job id synchronously so unparseable input throws before any browser launch
+        const jobId = getJobId(urlOrId);
+
+        // A single job can only be opened with an authenticated session
+        const strategy = this._runStrategy;
+
+        if (!(strategy instanceof AuthenticatedStrategy)) {
+            throw new Error("scrapeJob requires an authenticated session. Set the LI_AT_COOKIE environment variable.");
+        }
+
+        try {
+            if (this._state === states.notInitialized) {
+                await this._initialize();
+            }
+            else if (this._state === states.initializing) {
+                const timeout = 10000;
+                const pollingTime = 100;
+                let elapsed = 0;
+
+                while(this._state !== states.initialized) {
+                    await sleep(pollingTime);
+                    elapsed += pollingTime;
+
+                    if (elapsed >= timeout) {
+                        throw new Error(`Initialize timeout exceeded: ${timeout}ms`);
+                    }
+                }
+            }
+
+            // Open a new page and prepare a Chrome Developer Tools session for the single job
+            const page = await this._browser!.newPage();
+            const cdpSession = await page.createCDPSession();
+
+            // Disable Content Security Policy
+            await page.setBypassCSP(true);
+
+            // Tricks to speed up page
+            await cdpSession.send('Page.enable');
+            await cdpSession.send('Page.setWebLifecycleState', {
+                state: 'active',
+            });
+
+            // Run single-job strategy
+            await strategy.scrapeJob(
+                this._browser!,
+                page,
+                cdpSession,
+                jobId,
+                Boolean(options?.applyLink),
+            );
+
+            // Surface a rotated session cookie before ending
+            await this._emitRefreshedSession();
+
+            // Close page
+            page && await page.close();
+
+            // Emit end event
+            this.emit(events.scraper.end);
+        }
+        catch (err: any) {
             this.emit(events.scraper.error, err);
             await this.close();
             throw err;

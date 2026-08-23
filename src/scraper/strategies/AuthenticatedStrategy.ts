@@ -1,7 +1,7 @@
 import { config } from "../../config";
 import { RunStrategy, IRunStrategyResult, ILoadResult } from "./RunStrategy";
 import { Browser, Page, CDPSession } from "puppeteer";
-import { events, IMetrics } from "../events";
+import { events, IData, IMetrics } from "../events";
 import { sleep } from "../../utils/utils";
 import { normalizeString, cleanApplicantCount } from "../../utils/string";
 import { parseRelativeDate } from "../../utils/dates";
@@ -18,6 +18,8 @@ export const selectors = {
     applyBtn: 'button.jobs-apply-button[role="link"]',
     title: '.artdeco-entity-lockup__title',
     company: '.artdeco-entity-lockup__subtitle',
+    panelTitle: '.job-details-jobs-unified-top-card__job-title',
+    panelCompany: '.job-details-jobs-unified-top-card__company-name',
     companyLink: '.job-details-jobs-unified-top-card__company-name a',
     companyEmployeeCount: '.jobs-company__box .jobs-company__inline-information',
     place: '.artdeco-entity-lockup__caption',
@@ -38,6 +40,38 @@ export const selectors = {
     paginationNextBtn: 'li[data-test-pagination-page-btn].selected + li',
     paginationBtn: (index: number) => `li[data-test-pagination-page-btn="${index}"] button`,
 };
+
+// A standalone /jobs/view/<id> page is obfuscated, so a single job is opened inside a search
+// context: the currentJobId url param renders the full detail panel on its own, while a throwaway
+// keywords value satisfies the search route
+const SCRAPE_JOB_SEARCH_KEYWORDS = "engineer";
+
+// Time budget for the single-job detail panel to render and settle
+const SINGLE_JOB_PANEL_TIMEOUT = 15000;
+
+// The description length must stay unchanged for this long before the panel is considered settled
+const SINGLE_JOB_PANEL_QUIET_PERIOD = 1000;
+
+/**
+ * Card-derived and contextual fields fed to the shared detail extractor. The extractor reads the
+ * panel/document-scoped fields itself; these are the fields whose source differs between a search
+ * card and a single-job panel.
+ */
+interface IExtractJobDataParams {
+    query: string;
+    location: string;
+    jobId: string;
+    jobIndex: number;
+    link: string;
+    title: string;
+    company: string;
+    place: string;
+    date: string; // ISO date from the card <time>, or "" to fall back to the relative date text
+    companyImgLink?: string;
+    applyLink: boolean; // Whether to capture the external apply link
+    descriptionFn?: () => string;
+    tag: string;
+}
 
 /**
  * @class AuthenticatedStrategy
@@ -341,6 +375,436 @@ export class AuthenticatedStrategy extends RunStrategy {
     };
 
     /**
+     * Extract the detail-panel fields for a single job and assemble the emitted payload. The panel
+     * must already be loaded. Card-derived and contextual fields are supplied by the caller; every
+     * other field is read here, document-scoped, so the search loop and the single-job path share
+     * a single extractor.
+     * @param {Page} page
+     * @param {CDPSession} cdpSession
+     * @param {IExtractJobDataParams} params
+     * @returns {Promise<IData>}
+     * @static
+     * @private
+     */
+    private static _extractJobData = async (
+        page: Page,
+        cdpSession: CDPSession,
+        params: IExtractJobDataParams,
+    ): Promise<IData> => {
+        const { tag } = params;
+        let jobDate = params.date;
+        let jobDescription: string;
+        let jobDescriptionHTML: string;
+
+        // Use custom description function if available
+        logger.debug(tag, 'Evaluating selectors', [
+            selectors.description,
+        ]);
+
+        if (params.descriptionFn) {
+            const [customDescription, descriptionHTML] = await Promise.all([
+                page.evaluate(`(${params.descriptionFn.toString()})();`),
+                page.evaluate((selector) => {
+                    return (<HTMLElement>document.querySelector(selector)).outerHTML;
+                }, selectors.description)
+            ]);
+
+            jobDescription = customDescription as string;
+            jobDescriptionHTML = descriptionHTML;
+        }
+        else {
+            [jobDescription, jobDescriptionHTML] = await page.evaluate((selector) => {
+                    const el = (<HTMLElement>document.querySelector(selector));
+                    return [el.innerText, el.outerHTML];
+                },
+                selectors.description
+            );
+        }
+
+        // Extract date text (eg '1 week ago')
+        const jobDateText = await page.evaluate((selector) => {
+            const el = document.querySelector(selector) as HTMLElement | null;
+
+            if (el) {
+                return el.innerText;
+            }
+            else {
+                return '';
+            }
+        }, selectors.dateText);
+
+        // A reposted listing is flagged in the date text; the card's <time>
+        // datetime is authoritative when present, otherwise the ISO date is
+        // approximated from the relative date text
+        const jobReposted = /reposted/i.test(jobDateText);
+
+        if (!jobDate) {
+            jobDate = parseRelativeDate(jobDateText, new Date());
+        }
+
+        // Extract company link
+        const jobCompanyLink = await page.evaluate((selector) => {
+            const el = document.querySelector(selector);
+
+            if (el) {
+                return el.getAttribute("href") || '';
+            }
+            else {
+                return '';
+            }
+        }, selectors.companyLink);
+
+        // Extract company employee count
+        logger.debug(tag, 'Evaluating selectors', [
+            selectors.companyEmployeeCount,
+        ]);
+
+        const jobCompanyEmployeeCount = await page.evaluate((selector: string) => {
+            const spans = Array.from(document.querySelectorAll<HTMLElement>(selector));
+            const el = spans.find(e => /employee/i.test(e.innerText));
+
+            if (el) {
+                return el.innerText.split(' employees')[0].replace(/,/g, '').trim();
+            }
+
+            return '';
+        }, selectors.companyEmployeeCount);
+
+        // Extract salary, easy-apply flag, applicant count and benefits
+        logger.debug(tag, 'Evaluating selectors', [
+            selectors.fitLevelButtons,
+            selectors.salaryRailCard,
+            selectors.applyButton,
+            selectors.tertiaryDescription,
+            selectors.benefits,
+        ]);
+
+        const [salary, isEasyApply, applicantCount, benefits] = await page.evaluate((
+            fitLevelSelector: string,
+            salaryRailSelector: string,
+            applyButtonSelector: string,
+            tertiarySelector: string,
+            benefitsSelector: string,
+        ): [string, boolean, string, string[]] => {
+            const moneyRe = /(\$|€|£|₹)\s?\d|\/(yr|hr)\b|per (year|hour)|K\/(yr|hr)/i;
+
+            // Prefer the first fit-level button when it reads as money, else the salary rail card
+            const fit = Array.from(document.querySelectorAll<HTMLElement>(fitLevelSelector))
+                .map(b => b.innerText.trim())
+                .filter(Boolean);
+            let salary = (fit[0] && moneyRe.test(fit[0])) ? fit[0] : '';
+
+            if (!salary) {
+                const card = document.querySelector<HTMLElement>(salaryRailSelector);
+
+                if (card) {
+                    const m = card.innerText.match(/[^\n]*(?:\$|€|£|₹)[^\n]*/);
+                    if (m) salary = m[0].trim();
+                }
+            }
+
+            // Easy Apply keeps the applicant on LinkedIn; the aria-label/text
+            // discriminates it from an external apply button
+            const applyBtn = document.querySelector<HTMLElement>(applyButtonSelector);
+            const isEasyApply = !!applyBtn &&
+                /easy apply/i.test(((applyBtn.getAttribute('aria-label') || '') + ' ' + (applyBtn.innerText || '')));
+
+            // The tertiary container reads "<place> · <date> · <applicants>", any
+            // segment may be absent, so the applicant segment is matched by shape
+            // rather than by position
+            let applicantCount = '';
+            const tertiary = document.querySelector<HTMLElement>(tertiarySelector);
+
+            if (tertiary) {
+                const segments = tertiary.innerText
+                    .split('·')
+                    .map(e => e.replace(/[\n\r\t ]+/g, ' ').trim())
+                    .filter(e => e.length);
+
+                applicantCount = segments.find(e => /applicant|clicked apply/i.test(e)) || '';
+            }
+
+            const benefits = Array.from(document.querySelectorAll<HTMLElement>(benefitsSelector))
+                .map(e => (e.textContent || '').trim())
+                .filter(Boolean);
+
+            return [salary, isEasyApply, applicantCount, benefits];
+        },
+            selectors.fitLevelButtons,
+            selectors.salaryRailCard,
+            selectors.applyButton,
+            selectors.tertiaryDescription,
+            selectors.benefits,
+        );
+
+        const jobSalary = normalizeString(salary);
+        const jobApplicantCount = cleanApplicantCount(applicantCount);
+        const jobBenefits = benefits;
+
+        // Extract job insights
+        logger.debug(tag, 'Evaluating selectors', [
+            selectors.insights,
+        ]);
+
+        const jobInsights = await page.evaluate((jobInsightsSelector: string) => {
+            const nodes = document.querySelectorAll(jobInsightsSelector);
+            return Array.from(nodes).map(e => e.textContent!
+                .replace(/[\n\r\t ]+/g, ' ').trim());
+        }, selectors.insights);
+
+        // Apply link
+        let jobApplyLink;
+
+        if (params.applyLink) {
+            const applyLinkRes = await AuthenticatedStrategy._extractApplyLink(page, cdpSession, tag);
+
+            if (applyLinkRes.success) {
+                jobApplyLink = applyLinkRes.url as string;
+            }
+        }
+
+        return {
+            query: params.query,
+            location: params.location,
+            jobId: params.jobId,
+            jobIndex: params.jobIndex,
+            link: params.link,
+            applyLink: jobApplyLink,
+            title: normalizeString(params.title),
+            company: normalizeString(params.company),
+            companyLink: jobCompanyLink,
+            companyEmployeeCount: jobCompanyEmployeeCount || undefined,
+            companyImgLink: params.companyImgLink,
+            place: normalizeString(params.place),
+            description: jobDescription,
+            descriptionHTML: jobDescriptionHTML,
+            date: jobDate,
+            dateText: jobDateText,
+            insights: jobInsights,
+            salary: jobSalary || undefined,
+            isEasyApply: isEasyApply,
+            applicantCount: jobApplicantCount || undefined,
+            benefits: jobBenefits.length ? jobBenefits : undefined,
+            reposted: jobReposted,
+        };
+    };
+
+    /**
+     * Wait for the detail panel of a single job opened by its currentJobId to render and settle.
+     * The panel first paints an "About the job" placeholder, so readiness requires the requested
+     * job's title to be present and its description length to stop growing.
+     * @param {Page} page
+     * @param {string} jobId
+     * @param {number} timeout
+     * @returns {Promise<boolean>}
+     * @static
+     * @private
+     */
+    private static _waitForJobPanel = async (
+        page: Page,
+        jobId: string,
+        timeout: number = SINGLE_JOB_PANEL_TIMEOUT,
+    ): Promise<boolean> => {
+        const pollingTime = 50;
+        let elapsed = 0;
+        let stableFor = 0;
+        let lastLength = -1;
+
+        while (elapsed < timeout) {
+            let state: { hasId: boolean; hasTitle: boolean; length: number } | null;
+
+            try {
+                state = await page.evaluate(
+                    (jobId: string, panelSelector: string, titleSelector: string, descriptionSelector: string) => {
+                        const panel = document.querySelector(panelSelector);
+                        const titleEl = document.querySelector(titleSelector) as HTMLElement | null;
+                        const descEl = document.querySelector(descriptionSelector) as HTMLElement | null;
+
+                        const hasId = panel ? panel.innerHTML.includes(jobId) : false;
+                        const title = titleEl
+                            ? (titleEl.innerText.split('\n').map(e => e.trim()).find(e => e.length) || "")
+                            : "";
+                        const length = descEl ? descEl.innerText.length : 0;
+
+                        return { hasId: hasId, hasTitle: title.length > 0, length: length };
+                    },
+                    jobId,
+                    selectors.detailsPanel,
+                    selectors.panelTitle,
+                    selectors.description,
+                );
+            }
+            catch (err) {
+                // page.evaluate rejects while the document is being replaced
+                state = null;
+            }
+
+            if (state && state.hasId && state.hasTitle && state.length > 0) {
+                if (state.length === lastLength) {
+                    stableFor += pollingTime;
+
+                    if (stableFor >= SINGLE_JOB_PANEL_QUIET_PERIOD) {
+                        return true;
+                    }
+                }
+                else {
+                    stableFor = 0;
+                }
+
+                lastLength = state.length;
+            }
+            else {
+                stableFor = 0;
+                lastLength = -1;
+            }
+
+            await sleep(pollingTime);
+            elapsed += pollingTime;
+        }
+
+        return false;
+    };
+
+    /**
+     * Scrape a single job by its id, bypassing search and pagination
+     *
+     * A standalone /jobs/view/<id> page is obfuscated, so the job is opened inside a search
+     * context: the currentJobId param renders the full detail panel for the requested job from
+     * the url alone, with no card to click. Every field is read from the panel, document-scoped.
+     *
+     * @param {Browser} browser
+     * @param {Page} page
+     * @param {CDPSession} cdpSession
+     * @param {string} jobId
+     * @param {boolean} applyLink
+     * @returns {Promise<void>}
+     */
+    public scrapeJob = async (
+        browser: Browser,
+        page: Page,
+        cdpSession: CDPSession,
+        jobId: string,
+        applyLink: boolean,
+    ): Promise<void> => {
+        const tag = `[job:${jobId}]`;
+
+        // Navigate to home page first to set the session cookie
+        logger.debug(tag, "Opening", urls.home);
+
+        await page.goto(urls.home, {
+            waitUntil: 'load',
+        });
+
+        // Set cookie
+        logger.info("Setting authentication cookie");
+        await page.browser().setCookie({
+            name: "li_at",
+            value: config.LI_AT_COOKIE!,
+            domain: ".www.linkedin.com"
+        });
+
+        // The currentJobId render depends on a search context, so the url carries a throwaway
+        // keywords value alongside the requested job id
+        const searchUrl = new URL(urls.jobsSearch);
+        searchUrl.searchParams.set("keywords", SCRAPE_JOB_SEARCH_KEYWORDS);
+        searchUrl.searchParams.set("currentJobId", jobId);
+
+        // The panel is opened via the search route, but the link emitted to consumers stays the
+        // canonical job url
+        const jobLink = `${urls.jobs}/view/${jobId}`;
+
+        logger.info(tag, "Opening", searchUrl.href);
+
+        await page.goto(searchUrl.href, {
+            waitUntil: 'load',
+        });
+
+        // Verify session
+        if (!(await AuthenticatedStrategy._isAuthenticatedSession(page))) {
+            logger.error("The provided session cookie is invalid. Check the documentation on how to obtain a valid session cookie.");
+            this.scraper.emit(events.scraper.invalidSession);
+            return;
+        }
+
+        // Wait for the requested job's detail panel to render and settle
+        const panelLoaded = await AuthenticatedStrategy._waitForJobPanel(page, jobId);
+
+        if (!panelLoaded) {
+            // A lost session tells us nothing about the job itself, surface it as invalidSession
+            if (!(await AuthenticatedStrategy._isAuthenticatedSession(page))) {
+                logger.warn(tag, "Session is invalid, cannot confirm job");
+                this.scraper.emit(events.scraper.invalidSession);
+                return;
+            }
+
+            // Session healthy and the panel never rendered: the job genuinely does not exist or
+            // is no longer available
+            logger.warn(tag, `Job ${jobId} not found or no longer available`);
+            this.scraper.emit(events.scraper.notFound, { jobId });
+            return;
+        }
+
+        // Read the card-equivalent fields from the panel top card
+        logger.debug(tag, 'Evaluating selectors', [
+            selectors.panelTitle,
+            selectors.panelCompany,
+            selectors.tertiaryDescription,
+        ]);
+
+        const { title, company, place } = await page.evaluate(
+            (titleSelector: string, companySelector: string, tertiarySelector: string) => {
+                const titleEl = document.querySelector(titleSelector) as HTMLElement | null;
+                const companyEl = document.querySelector(companySelector) as HTMLElement | null;
+                const tertiaryEl = document.querySelector(tertiarySelector) as HTMLElement | null;
+
+                const title = titleEl
+                    ? (titleEl.innerText.split('\n').map(e => e.trim()).find(e => e.length) || "")
+                    : "";
+
+                const company = companyEl ? companyEl.innerText.trim() : "";
+
+                // The container reads "<place> · <date> · <applicants>", but any segment can be
+                // missing; the place is the first segment
+                let place = "";
+
+                if (tertiaryEl) {
+                    const segments = tertiaryEl.innerText
+                        .split('·')
+                        .map(e => e.replace(/[\n\r\t ]+/g, ' ').trim())
+                        .filter(e => e.length);
+
+                    place = segments.length ? segments[0] : "";
+                }
+
+                return { title, company, place };
+            },
+            selectors.panelTitle,
+            selectors.panelCompany,
+            selectors.tertiaryDescription,
+        );
+
+        // The single-job panel exposes no machine date, so date is left empty and the extractor
+        // approximates the ISO date from the relative date text
+        const jobData = await AuthenticatedStrategy._extractJobData(page, cdpSession, {
+            query: "",
+            location: "",
+            jobId: jobId,
+            jobIndex: -1,
+            link: jobLink,
+            title: title,
+            company: company,
+            place: place,
+            date: "",
+            companyImgLink: "",
+            applyLink: applyLink,
+            tag: tag,
+        });
+
+        logger.info(tag, "Processed");
+        this.scraper.emit(events.scraper.data, jobData);
+    };
+
+    /**
      * Run strategy
      * @param browser
      * @param page
@@ -445,25 +909,14 @@ export class AuthenticatedStrategy extends RunStrategy {
 
                 let jobId;
                 let jobLink;
-                let jobApplyLink;
                 let jobTitle;
                 let jobCompany;
-                let jobCompanyLink;
                 let jobCompanyImgLink;
                 let jobPlace;
-                let jobDescription;
-                let jobDescriptionHTML;
                 let jobDate: string = "";
-                let jobDateText: string = "";
                 let loadDetailsResult;
-                let jobInsights;
-                let jobCompanyEmployeeCount: string = "";
-                let jobSalary: string = "";
-                let jobIsEasyApply: boolean = false;
-                let jobApplicantCount: string = "";
-                let jobBenefits: string[] = [];
-                let jobReposted: boolean = false;
                 let jobIsPromoted = false;
+                let jobData: IData | undefined;
 
                 try {
                     // Extract job main fields
@@ -590,170 +1043,22 @@ export class AuthenticatedStrategy extends RunStrategy {
                         continue;
                     }
 
-                    // Use custom description function if available
-                    logger.debug(tag, 'Evaluating selectors', [
-                        selectors.description,
-                    ]);
-
-                    if (query.options?.descriptionFn) {
-                        [jobDescription, jobDescriptionHTML] = await Promise.all([
-                            page.evaluate(`(${query.options.descriptionFn.toString()})();`),
-                            page.evaluate((selector) => {
-                                return (<HTMLElement>document.querySelector(selector)).outerHTML;
-                            }, selectors.description)
-                        ]);
-                    }
-                    else {
-                        [jobDescription, jobDescriptionHTML] = await page.evaluate((selector) => {
-                                const el = (<HTMLElement>document.querySelector(selector));
-                                return [el.innerText, el.outerHTML];
-                            },
-                            selectors.description
-                        );
-                    }
-
-                    jobDescription = jobDescription as string;
-
-                    // Extract date text (eg '1 week ago')
-                    jobDateText = await page.evaluate((selector) => {
-                        const el = document.querySelector(selector) as HTMLElement | null;
-
-                        if (el) {
-                            return el.innerText;
-                        }
-                        else {
-                            return '';
-                        }
-                    }, selectors.dateText);
-
-                    // A reposted listing is flagged in the date text; the card's <time>
-                    // datetime is authoritative when present, otherwise the ISO date is
-                    // approximated from the relative date text
-                    jobReposted = /reposted/i.test(jobDateText);
-
-                    if (!jobDate) {
-                        jobDate = parseRelativeDate(jobDateText, new Date());
-                    }
-
-                    // Extract company link
-                    jobCompanyLink = await page.evaluate((selector) => {
-                        const el = document.querySelector(selector);
-
-                        if (el) {
-                            return el.getAttribute("href") || '';
-                        }
-                        else {
-                            return '';
-                        }
-                    }, selectors.companyLink);
-
-                    // Extract company employee count
-                    logger.debug(tag, 'Evaluating selectors', [
-                        selectors.companyEmployeeCount,
-                    ]);
-
-                    jobCompanyEmployeeCount = await page.evaluate((selector: string) => {
-                        const spans = Array.from(document.querySelectorAll<HTMLElement>(selector));
-                        const el = spans.find(e => /employee/i.test(e.innerText));
-
-                        if (el) {
-                            return el.innerText.split(' employees')[0].replace(/,/g, '').trim();
-                        }
-
-                        return '';
-                    }, selectors.companyEmployeeCount);
-
-                    // Extract salary, easy-apply flag, applicant count and benefits
-                    logger.debug(tag, 'Evaluating selectors', [
-                        selectors.fitLevelButtons,
-                        selectors.salaryRailCard,
-                        selectors.applyButton,
-                        selectors.tertiaryDescription,
-                        selectors.benefits,
-                    ]);
-
-                    const [salary, isEasyApply, applicantCount, benefits] = await page.evaluate((
-                        fitLevelSelector: string,
-                        salaryRailSelector: string,
-                        applyButtonSelector: string,
-                        tertiarySelector: string,
-                        benefitsSelector: string,
-                    ): [string, boolean, string, string[]] => {
-                        const moneyRe = /(\$|€|£|₹)\s?\d|\/(yr|hr)\b|per (year|hour)|K\/(yr|hr)/i;
-
-                        // Prefer the first fit-level button when it reads as money, else the salary rail card
-                        const fit = Array.from(document.querySelectorAll<HTMLElement>(fitLevelSelector))
-                            .map(b => b.innerText.trim())
-                            .filter(Boolean);
-                        let salary = (fit[0] && moneyRe.test(fit[0])) ? fit[0] : '';
-
-                        if (!salary) {
-                            const card = document.querySelector<HTMLElement>(salaryRailSelector);
-
-                            if (card) {
-                                const m = card.innerText.match(/[^\n]*(?:\$|€|£|₹)[^\n]*/);
-                                if (m) salary = m[0].trim();
-                            }
-                        }
-
-                        // Easy Apply keeps the applicant on LinkedIn; the aria-label/text
-                        // discriminates it from an external apply button
-                        const applyBtn = document.querySelector<HTMLElement>(applyButtonSelector);
-                        const isEasyApply = !!applyBtn &&
-                            /easy apply/i.test(((applyBtn.getAttribute('aria-label') || '') + ' ' + (applyBtn.innerText || '')));
-
-                        // The tertiary container reads "<place> · <date> · <applicants>", any
-                        // segment may be absent, so the applicant segment is matched by shape
-                        // rather than by position
-                        let applicantCount = '';
-                        const tertiary = document.querySelector<HTMLElement>(tertiarySelector);
-
-                        if (tertiary) {
-                            const segments = tertiary.innerText
-                                .split('·')
-                                .map(e => e.replace(/[\n\r\t ]+/g, ' ').trim())
-                                .filter(e => e.length);
-
-                            applicantCount = segments.find(e => /applicant|clicked apply/i.test(e)) || '';
-                        }
-
-                        const benefits = Array.from(document.querySelectorAll<HTMLElement>(benefitsSelector))
-                            .map(e => (e.textContent || '').trim())
-                            .filter(Boolean);
-
-                        return [salary, isEasyApply, applicantCount, benefits];
-                    },
-                        selectors.fitLevelButtons,
-                        selectors.salaryRailCard,
-                        selectors.applyButton,
-                        selectors.tertiaryDescription,
-                        selectors.benefits,
-                    );
-
-                    jobSalary = normalizeString(salary);
-                    jobIsEasyApply = isEasyApply;
-                    jobApplicantCount = cleanApplicantCount(applicantCount);
-                    jobBenefits = benefits;
-
-                    // Extract job insights
-                    logger.debug(tag, 'Evaluating selectors', [
-                        selectors.insights,
-                    ]);
-
-                    jobInsights = await page.evaluate((jobInsightsSelector: string) => {
-                        const nodes = document.querySelectorAll(jobInsightsSelector);
-                        return Array.from(nodes).map(e => e.textContent!
-                            .replace(/[\n\r\t ]+/g, ' ').trim());
-                    }, selectors.insights);
-
-                    // Apply link
-                    if (query.options?.applyLink) {
-                        const applyLinkRes = await AuthenticatedStrategy._extractApplyLink(page, cdpSession, tag);
-
-                        if (applyLinkRes.success) {
-                            jobApplyLink = applyLinkRes.url as string;
-                        }
-                    }
+                    // Extract the remaining detail-panel fields and assemble the payload
+                    jobData = await AuthenticatedStrategy._extractJobData(page, cdpSession, {
+                        query: query.query || "",
+                        location: location,
+                        jobId: jobId!,
+                        jobIndex: jobIndex,
+                        link: jobLink,
+                        title: jobTitle,
+                        company: jobCompany,
+                        place: jobPlace,
+                        date: jobDate,
+                        companyImgLink: jobCompanyImgLink,
+                        applyLink: Boolean(query.options?.applyLink),
+                        descriptionFn: query.options?.descriptionFn,
+                        tag: tag,
+                    });
                 }
                 catch(err: any) {
                     const errorMessage = `${tag}\t${err.message}`;
@@ -764,30 +1069,9 @@ export class AuthenticatedStrategy extends RunStrategy {
                 }
 
                 // Emit data (NB: should be outside of try/catch block to be properly tested)
-                this.scraper.emit(events.scraper.data, {
-                    query: query.query || "",
-                    location: location,
-                    jobId: jobId!,
-                    jobIndex: jobIndex,
-                    link: jobLink!,
-                    applyLink: jobApplyLink,
-                    title: normalizeString(jobTitle!),
-                    company: normalizeString(jobCompany!),
-                    companyLink: jobCompanyLink,
-                    companyEmployeeCount: jobCompanyEmployeeCount || undefined,
-                    companyImgLink: jobCompanyImgLink,
-                    place: normalizeString(jobPlace!),
-                    description: jobDescription! as string,
-                    descriptionHTML: jobDescriptionHTML! as string,
-                    date: jobDate,
-                    dateText: jobDateText,
-                    insights: jobInsights,
-                    salary: jobSalary || undefined,
-                    isEasyApply: jobIsEasyApply,
-                    applicantCount: jobApplicantCount || undefined,
-                    benefits: jobBenefits.length ? jobBenefits : undefined,
-                    reposted: jobReposted,
-                });
+                if (jobData) {
+                    this.scraper.emit(events.scraper.data, jobData);
+                }
 
                 jobIndex += 1;
                 metrics.processed += 1;

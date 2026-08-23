@@ -47,7 +47,7 @@ export class AuthenticatedStrategy extends RunStrategy {
      * @private
      */
     private static _isAuthenticatedSession = async (page: Page): Promise<boolean> => {
-        const cookies = await page.cookies();
+        const cookies = await page.browser().cookies();
         return cookies.some(e => e.name === "li_at");
     };
 
@@ -372,7 +372,7 @@ export class AuthenticatedStrategy extends RunStrategy {
 
         // Set cookie
         logger.info("Setting authentication cookie");
-        await page.setCookie({
+        await page.browser().setCookie({
             name: "li_at",
             value: config.LI_AT_COOKIE!,
             domain: ".www.linkedin.com"

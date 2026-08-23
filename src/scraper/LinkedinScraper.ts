@@ -9,7 +9,6 @@ import { sleep } from '../utils/utils';
 import { getQueryParams } from '../utils/url';
 import { urls, } from './constants';
 import { IQuery, IQueryOptions, validateQuery } from './query';
-import { getRandomUserAgent } from '../utils/browser';
 import { Scraper, ScraperOptions } from './Scraper';
 import { RunStrategy, AuthenticatedStrategy, AnonymousStrategy } from './strategies';
 import { logger } from '../logger/logger';
@@ -231,9 +230,6 @@ class LinkedinScraper extends Scraper {
                 await cdpSession.send('Page.setWebLifecycleState', {
                     state: 'active',
                 });
-
-                // // Set a random user agent
-                // await page.setUserAgent(getRandomUserAgent());
 
                 // Enable request interception
                 await page.setRequestInterception(true);

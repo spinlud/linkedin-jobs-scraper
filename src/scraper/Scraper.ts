@@ -3,12 +3,20 @@ import TypedEmitter from "typed-emitter";
 import { IEventListeners } from "./events";
 import { LaunchOptions, ConnectOptions } from "puppeteer";
 import { IQuery, IQueryOptions } from "./query";
+import { Pacer, IPacingOptions, createPacer } from "./Pacer";
 import { logger } from "../logger/logger";
 
-export type ScraperOptions = LaunchOptions & ConnectOptions;
+// `pacing` is named to avoid colliding with Puppeteer's own LaunchOptions.slowMo, which is ms
+// of DevTools-op delay, a different concept.
+export type ScraperOptions = LaunchOptions & ConnectOptions & { pacing?: IPacingOptions };
 
 export abstract class Scraper extends (EventEmitter as new () => TypedEmitter<IEventListeners>) {
     public options: ScraperOptions;
+
+    // The delay every sleep site of a run reads. One instance is shared by every sequential
+    // location of a run, since LinkedIn enforces its rate limit per account; it is rebuilt on a
+    // fresh run.
+    public pacer: Pacer;
 
     /**
      * @constructor
@@ -17,6 +25,7 @@ export abstract class Scraper extends (EventEmitter as new () => TypedEmitter<IE
     protected constructor(options: ScraperOptions) {
         super();
         this.options = options;
+        this.pacer = createPacer(options.pacing);
     }
 
     /**

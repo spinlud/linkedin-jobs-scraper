@@ -32,6 +32,8 @@ export interface IMetrics {
     failed: number;  // Number of jobs failed to process (because of an error)
     missed: number; // Number of missed jobs to load during scraping
     skipped: number; // Skipped jobs
+    throttled: number; // Number of 429 (too many requests) responses reported to the shared pacer
+    pace: number; // Current pacer delay in seconds
 }
 
 export interface IBegin {

@@ -8,6 +8,8 @@ import { sleep } from '../utils/utils';
 import { getQueryParams } from '../utils/url';
 import { urls, } from './constants';
 import { IQuery, IQueryOptions, validateQuery } from './query';
+import { createPacer } from './Pacer';
+import { THROTTLED_STATUS } from './constants';
 import { Scraper, ScraperOptions } from './Scraper';
 import { AuthenticatedStrategy } from './strategies';
 import { resolveAuthConfig, SESSION_COOKIE_NAME } from './auth';
@@ -49,7 +51,10 @@ class LinkedinScraper extends Scraper {
 
         this._browser && this._browser.removeAllListeners();
 
-        const launchOptions = deepmerge.all([browserDefaults, this.options]);
+        // `pacing` is a scraper concept, not a Puppeteer launch option, so it is kept out of
+        // what is handed to puppeteer.launch.
+        const { pacing, ...launchableOptions } = this.options;
+        const launchOptions = deepmerge.all([browserDefaults, launchableOptions]);
         logger.info('Setting chrome launch options', launchOptions);
         this._browser = await puppeteer.launch(launchOptions);
 
@@ -74,6 +79,23 @@ class LinkedinScraper extends Scraper {
 
         this._state = states.initialized;
     }
+
+    /**
+     * Return whether a url points at LinkedIn, so a 429 seen on it counts as the account being
+     * throttled rather than a third party failing
+     * @param {string} url
+     * @returns {boolean}
+     * @private
+     * @static
+     */
+    private static _isSameOriginLinkedIn = (url: string): boolean => {
+        try {
+            return new URL(url).hostname.toLowerCase().endsWith("linkedin.com");
+        }
+        catch (err) {
+            return false;
+        }
+    };
 
     /**
      * Build jobs search url
@@ -162,6 +184,11 @@ class LinkedinScraper extends Scraper {
         options?: IQueryOptions
     ): Promise<void> => {
         let tag: string;
+
+        // One pacer per run, threaded across every sequential location so a delay learned while
+        // throttled on one location persists into the next (same account). A fresh run starts
+        // from the configured base delay again.
+        this.pacer = createPacer(this.options.pacing);
 
         if (!Array.isArray(queries)) {
             queries = [queries];
@@ -282,8 +309,17 @@ class LinkedinScraper extends Scraper {
 
                 // Error response and rate limiting check
                 page.on("response",  response => {
-                    if (response.status() === 429) {
-                        logger.warn(tag, "Error 429 too many requests. You would probably need to use a higher 'slowMo' value and/or reduce the number of concurrent queries.");
+                    if (response.status() === THROTTLED_STATUS) {
+                        // Navigation 429s are handled by the open-and-wait backoff ladder, which
+                        // reports them to the pacer itself; only same-origin resource/XHR refusals
+                        // (job detail fetches) are reported here, so neither is counted twice.
+                        const request = response.request();
+
+                        if (!request.isNavigationRequest() && LinkedinScraper._isSameOriginLinkedIn(response.url())) {
+                            this.pacer.throttled();
+                        }
+
+                        logger.warn(tag, "Error 429 too many requests. You would probably need to use a higher 'pacing.baseDelay' value and/or reduce the number of concurrent queries.");
                     }
                     else if (response.status() >= 400) {
                         logger.warn(tag, response.status(), `Error for request ${response.request().url()}`)

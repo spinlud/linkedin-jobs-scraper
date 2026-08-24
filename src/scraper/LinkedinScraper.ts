@@ -7,7 +7,7 @@ import { browserDefaults, queryOptionsDefault } from './defaults';
 import { sleep } from '../utils/utils';
 import { getQueryParams, getJobId } from '../utils/url';
 import { urls, } from './constants';
-import { IQuery, IQueryOptions, validateQuery } from './query';
+import { IQuery, IQueryOptions, Location, validateQuery } from './query';
 import { createPacer } from './Pacer';
 import { THROTTLED_STATUS } from './constants';
 import { Scraper, ScraperOptions } from './Scraper';
@@ -100,19 +100,22 @@ class LinkedinScraper extends Scraper {
     /**
      * Build jobs search url
      * @param {string} query
-     * @param {string} location
+     * @param {string | Location} location
      * @param {IQueryOptions} options
      * @returns {string}
      * @private
      */
-    private _buildSearchUrl = (query: string, location: string, options: IQueryOptions): string => {
+    private _buildSearchUrl = (query: string, location: string | Location, options: IQueryOptions): string => {
         const url = new URL(urls.jobsSearch);
 
         if (query && query.length) {
             url.searchParams.append("keywords", query);
         }
 
-        if (location && location.length) {
+        if (location instanceof Location) {
+            url.searchParams.append("geoId", location.geoId);
+        }
+        else if (location && location.length) {
             url.searchParams.append("location", location);
         }
 
@@ -164,6 +167,38 @@ class LinkedinScraper extends Scraper {
                 }
 
                 url.searchParams.append("f_I", options.filters.industry.join(","));
+            }
+
+            if (options.filters.jobFunction) {
+                if (!Array.isArray(options.filters.jobFunction)) {
+                    options.filters.jobFunction = [options.filters.jobFunction]
+                }
+
+                url.searchParams.append("f_F", options.filters.jobFunction.join(","));
+            }
+
+            if (options.filters.benefits) {
+                if (!Array.isArray(options.filters.benefits)) {
+                    options.filters.benefits = [options.filters.benefits]
+                }
+
+                url.searchParams.append("f_BE", options.filters.benefits.join(","));
+            }
+
+            if (options.filters.commitments) {
+                if (!Array.isArray(options.filters.commitments)) {
+                    options.filters.commitments = [options.filters.commitments]
+                }
+
+                url.searchParams.append("f_JC", options.filters.commitments.join(","));
+            }
+
+            if (options.filters.easyApply) {
+                url.searchParams.append("f_AL", "true");
+            }
+
+            if (options.filters.under10Applicants) {
+                url.searchParams.append("f_EA", "true");
             }
         }
 
@@ -235,8 +270,9 @@ class LinkedinScraper extends Scraper {
 
             // Locations loop
             for (const location of query.options!.locations!) {
-                tag = `[${query.query}][${location}]`;
-                logger.info(tag, `Starting new query:`, `query="${query.query}"`, `location="${location}"`);
+                const locationTag = location instanceof Location ? location.label : location;
+                tag = `[${query.query}][${locationTag}]`;
+                logger.info(tag, `Starting new query:`, `query="${query.query}"`, `location="${locationTag}"`);
                 logger.info(tag, `Query options`, query.options);
 
                 // Open new page in incognito context
@@ -336,7 +372,7 @@ class LinkedinScraper extends Scraper {
                     cdpSession,
                     searchUrl,
                     query,
-                    location,
+                    locationTag,
                 );
 
                 // Check if forced exit is required

@@ -7,6 +7,9 @@ import {
     onSiteOrRemoteFilter,
     industryFilter,
     baseSalaryFilter,
+    jobFunctionFilter,
+    benefitsFilter,
+    commitmentsFilter,
 } from "./filters";
 
 export interface IQuery {
@@ -14,8 +17,23 @@ export interface IQuery {
     options?: IQueryOptions;
 }
 
+/**
+ * Geo-pin location, discriminated at URL-build time via `instanceof Location`.
+ * A `Location` sets `geoId` in the search url and omits the `location` param.
+ */
+export class Location {
+    constructor(
+        public readonly geoId: string,
+        public readonly name?: string,
+    ) {}
+
+    get label(): string {
+        return this.name ?? this.geoId;
+    }
+}
+
 export interface IQueryOptions {
-    locations?: string[];
+    locations?: (string | Location)[];
     pageOffset?: number;
     limit?: number;
     filters?: {
@@ -27,6 +45,11 @@ export interface IQueryOptions {
         experience?: string | string[];
         onSiteOrRemote?: string | string[];
         industry?: string | string[];
+        jobFunction?: string | string[];
+        benefits?: string | string[];
+        commitments?: string | string[];
+        easyApply?: boolean;
+        under10Applicants?: boolean;
     },
     descriptionFn?: () => string;
     optimize?: boolean;
@@ -63,11 +86,38 @@ export const validateQuery = (query: IQuery): IQueryValidationError[] => {
             limit,
         } = query.options;
 
-        if (locations && (!Array.isArray(locations) || !locations.every(e => typeof(e) === "string"))) {
-            errors.push({
-                param: "options.locations",
-                reason: `Must be an array of strings`
-            });
+        if (locations) {
+            if (!Array.isArray(locations)) {
+                errors.push({
+                    param: "options.locations",
+                    reason: `Must be an array of strings or Location instances`
+                });
+            }
+            else {
+                for (const location of locations) {
+                    if (location instanceof Location) {
+                        if (typeof(location.geoId) !== "string" || !location.geoId.length) {
+                            errors.push({
+                                param: "options.locations",
+                                reason: `Location geoId must be a non-empty string`
+                            });
+                        }
+
+                        if (location.name !== undefined && typeof(location.name) !== "string") {
+                            errors.push({
+                                param: "options.locations",
+                                reason: `Location name must be a string`
+                            });
+                        }
+                    }
+                    else if (typeof(location) !== "string") {
+                        errors.push({
+                            param: "options.locations",
+                            reason: `Must be an array of strings or Location instances`
+                        });
+                    }
+                }
+            }
         }
 
         if (descriptionFn && typeof(descriptionFn) !== "function") {
@@ -241,6 +291,71 @@ export const validateQuery = (query: IQuery): IQueryValidationError[] => {
                         });
                     }
                 }
+            }
+
+            if (filters.jobFunction) {
+                const allowed = Object.values(jobFunctionFilter);
+
+                if (!Array.isArray(filters.jobFunction)) {
+                    filters.jobFunction = [filters.jobFunction];
+                }
+
+                for (const t of filters.jobFunction) {
+                    if (!allowed.includes(t)) {
+                        errors.push({
+                            param: "options.filters.jobFunction",
+                            reason: `Must be one of ${allowed.join(", ")}`
+                        });
+                    }
+                }
+            }
+
+            if (filters.benefits) {
+                const allowed = Object.values(benefitsFilter);
+
+                if (!Array.isArray(filters.benefits)) {
+                    filters.benefits = [filters.benefits];
+                }
+
+                for (const t of filters.benefits) {
+                    if (!allowed.includes(t)) {
+                        errors.push({
+                            param: "options.filters.benefits",
+                            reason: `Must be one of ${allowed.join(", ")}`
+                        });
+                    }
+                }
+            }
+
+            if (filters.commitments) {
+                const allowed = Object.values(commitmentsFilter);
+
+                if (!Array.isArray(filters.commitments)) {
+                    filters.commitments = [filters.commitments];
+                }
+
+                for (const t of filters.commitments) {
+                    if (!allowed.includes(t)) {
+                        errors.push({
+                            param: "options.filters.commitments",
+                            reason: `Must be one of ${allowed.join(", ")}`
+                        });
+                    }
+                }
+            }
+
+            if (filters.hasOwnProperty("easyApply") && typeof(filters.easyApply) !== "boolean") {
+                errors.push({
+                    param: "options.filters.easyApply",
+                    reason: `Must be a boolean`
+                });
+            }
+
+            if (filters.hasOwnProperty("under10Applicants") && typeof(filters.under10Applicants) !== "boolean") {
+                errors.push({
+                    param: "options.filters.under10Applicants",
+                    reason: `Must be a boolean`
+                });
             }
         }
     }

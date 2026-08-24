@@ -10,21 +10,53 @@ import {
     AuthConfig,
     authenticate,
     isSessionInvalid,
+    isThrottled,
     maskUserAgent,
     SESSION_COOKIE_NAME,
 } from "../auth";
 import { InvalidCookieException } from "../exceptions";
 import { logger } from "../../logger/logger";
-import { urls } from "../constants";
+import {
+    urls,
+    JOB_ID_ATTRIBUTE,
+    PAGINATION_SIZE,
+    MAX_RESULTS_CEILING,
+    PAGINATION_RETRY_DELAY,
+    THROTTLED_STATUS,
+    THROTTLE_BACKOFF_DELAYS,
+    THROTTLE_BACKOFF_JITTER,
+    LIST_SETTLE_TIMEOUT,
+    LIST_SETTLE_QUIET_PERIOD,
+    LIST_SETTLE_POLL_INTERVAL,
+    LOAD_MORE_JOBS_POLL_INTERVAL,
+    LOAD_MORE_JOBS_TIMEOUT,
+    LOAD_JOB_CARD_TIMEOUT,
+    LOAD_JOB_CARD_POLL_INTERVAL,
+    MISSING_ITEM_GRACE,
+    CONTAINER_WAIT_TIMEOUT,
+    CONTAINER_WAIT_POLL_INTERVAL,
+} from "../constants";
 import debug from "debug";
 
 // How many times a lost session is rebuilt before the run is aborted, scoped per location.
 const MAX_SESSION_RECOVERIES = 2;
 
+// A standalone /jobs/view/<id> page is obfuscated, so a single job is opened inside a search
+// context: the currentJobId url param renders the full detail panel on its own, while a throwaway
+// keywords value satisfies the search route
+const SCRAPE_JOB_SEARCH_KEYWORDS = "engineer";
+
+// Time budget for the single-job detail panel to render and settle
+const SINGLE_JOB_PANEL_TIMEOUT = 15000;
+
+// The description length must stay unchanged for this long before the panel is considered settled
+const SINGLE_JOB_PANEL_QUIET_PERIOD = 1000;
+
 export const selectors = {
     container: '.scaffold-layout__list',
     chatPanel: '.msg-overlay-list-bubble',
     jobs: 'div.job-card-container',
+    jobItems: `.scaffold-layout__list li[${JOB_ID_ATTRIBUTE}]`,
     link: 'a.job-card-container__link',
     applyBtn: 'button.jobs-apply-button[role="link"]',
     title: '.artdeco-entity-lockup__title',
@@ -36,6 +68,8 @@ export const selectors = {
     place: '.artdeco-entity-lockup__caption',
     date: 'time',
     dateText: '.job-details-jobs-unified-top-card__primary-description-container span:nth-of-type(3)',
+    resultsCountStandalone: '.jobs-search-results-list__subtitle small, small.jobs-search-results-list__text',
+    resultsCountTitle: 'span#results-list__title',
     description: '.jobs-description',
     detailsPanel: '.jobs-search__job-details--container',
     detailsTop: '.jobs-details-top-card',
@@ -52,16 +86,32 @@ export const selectors = {
     paginationBtn: (index: number) => `li[data-test-pagination-page-btn="${index}"] button`,
 };
 
-// A standalone /jobs/view/<id> page is obfuscated, so a single job is opened inside a search
-// context: the currentJobId url param renders the full detail panel on its own, while a throwaway
-// keywords value satisfies the search route
-const SCRAPE_JOB_SEARCH_KEYWORDS = "engineer";
+/**
+ * Build the selector addressing a single item of the results list by its job id
+ * @param {string} jobId
+ * @returns {string}
+ */
+const getJobItemSelector = (jobId: string): string =>
+    `${selectors.container} li[${JOB_ID_ATTRIBUTE}="${jobId}"]`;
 
-// Time budget for the single-job detail panel to render and settle
-const SINGLE_JOB_PANEL_TIMEOUT = 15000;
+/**
+ * Return a wait, in seconds, drawn around a step of the backoff ladder
+ * @param {number} base the step of the ladder
+ * @returns {number}
+ */
+const jitteredBackoff = (base: number): number =>
+    base * (1 - THROTTLE_BACKOFF_JITTER + Math.random() * 2 * THROTTLE_BACKOFF_JITTER);
 
-// The description length must stay unchanged for this long before the panel is considered settled
-const SINGLE_JOB_PANEL_QUIET_PERIOD = 1000;
+interface IOpenResult {
+    success: boolean;
+    throttled: boolean; // Whether the last attempt came back throttled (HTTP 429)
+}
+
+interface ILoadCardResult {
+    success: boolean;
+    missing: boolean; // Whether the item has left the results list, rather than failed to render
+    error?: string;
+}
 
 /**
  * Card-derived and contextual fields fed to the shared detail extractor. The extractor reads the
@@ -118,7 +168,6 @@ export class AuthenticatedStrategy extends RunStrategy {
      * Check if session is authenticated
      * @param {Page} page
      * @returns {Promise<boolean>}
-     * @returns {Promise<ILoadResult>}
      * @static
      * @private
      */
@@ -173,43 +222,349 @@ export class AuthenticatedStrategy extends RunStrategy {
     };
 
     /**
-     * Load jobs
-     * @param page {Page}
-     * @param jobsTot {number}
-     * @param timeout {number}
+     * Return the ids of every job in the current results page, in display order
+     * @param {Page} page
+     * @returns {Promise<string[]>}
      * @static
      * @private
      */
-    private static _loadJobs = async (
+    private static _getJobIds = async (page: Page): Promise<string[]> => {
+        try {
+            const jobIds = await page.evaluate(
+                (itemsSelector: string, attribute: string) =>
+                    Array.from(document.querySelectorAll(itemsSelector))
+                        .map(e => e.getAttribute(attribute))
+                        .filter((e): e is string => Boolean(e)),
+                selectors.jobItems,
+                JOB_ID_ATTRIBUTE,
+            );
+
+            return jobIds ?? [];
+        }
+        catch (err) {
+            // page.evaluate rejects while the document is being replaced
+            return [];
+        }
+    };
+
+    /**
+     * Return the ids of the results list once it has stopped changing
+     *
+     * The first render of a page is not the page: LinkedIn paints a preliminary list and
+     * replaces it about a second later with the real one, and the two do not hold the same jobs.
+     * A full batch is what the list has to reach before holding still is believed; short of that
+     * only the timeout can tell a render still on its way from the last page of results.
+     *
+     * @param {Page} page
+     * @param {number} timeout seconds
+     * @param {number} quietPeriod seconds the list has to hold still to count as settled
+     * @returns {Promise<string[]>}
+     * @static
+     * @private
+     */
+    private static _waitForStableJobIds = async (
         page: Page,
-        jobsTot: number,
-        timeout: number = 2000,
-    ): Promise<any> => {
-        const pollingTime = 50;
+        timeout: number = LIST_SETTLE_TIMEOUT,
+        quietPeriod: number = LIST_SETTLE_QUIET_PERIOD,
+    ): Promise<string[]> => {
+        const sleepTime = LIST_SETTLE_POLL_INTERVAL;
+        let elapsed = 0;
+        let quiet = 0;
+        let jobIds: string[] = [];
+
+        while (elapsed < timeout) {
+            const current = await AuthenticatedStrategy._getJobIds(page);
+
+            if (current.length && AuthenticatedStrategy._sameIds(current, jobIds)) {
+                quiet += sleepTime;
+
+                if (quiet >= quietPeriod && jobIds.length >= PAGINATION_SIZE) {
+                    return jobIds;
+                }
+            }
+            else {
+                quiet = 0;
+                jobIds = current;
+            }
+
+            await sleep(sleepTime * 1000);
+            elapsed += sleepTime;
+        }
+
+        // A short list here is the last page of results, and an empty one a page holding none:
+        // both are the caller's to report
+        return jobIds;
+    };
+
+    /**
+     * Return whether two id lists hold the same ids in the same order
+     * @param {string[]} a
+     * @param {string[]} b
+     * @returns {boolean}
+     * @static
+     * @private
+     */
+    private static _sameIds = (a: string[], b: string[]): boolean =>
+        a.length === b.length && a.every((id, index) => id === b[index]);
+
+    /**
+     * Try to make LinkedIn append more items to the results list
+     *
+     * The list is filled in progressively as it is scrolled, so the number of items a page holds
+     * is not known upfront and has to be grown until it stops changing.
+     *
+     * @param {Page} page
+     * @param {number} jobCount
+     * @param {number} timeout seconds
+     * @returns {Promise<boolean>}
+     * @static
+     * @private
+     */
+    private static _loadMoreJobs = async (
+        page: Page,
+        jobCount: number,
+        timeout: number = LOAD_MORE_JOBS_TIMEOUT,
+    ): Promise<boolean> => {
+        const sleepTime = LOAD_MORE_JOBS_POLL_INTERVAL;
         let elapsed = 0;
 
-        await sleep(pollingTime);
+        while (elapsed < timeout) {
+            let count: number | null;
+
+            try {
+                count = await page.evaluate(
+                    (itemsSelector: string, knownCount: number) => {
+                        const items = document.querySelectorAll(itemsSelector);
+
+                        // Scrolling the last known item into view is what makes LinkedIn append
+                        // the next batch
+                        if (items.length && items.length <= knownCount) {
+                            items[items.length - 1].scrollIntoView({ block: 'end' });
+                        }
+
+                        return items.length;
+                    },
+                    selectors.jobItems,
+                    jobCount,
+                );
+            }
+            catch (err) {
+                count = null;
+            }
+
+            if (count !== null && count > jobCount) {
+                return true;
+            }
+
+            await sleep(sleepTime * 1000);
+            elapsed += sleepTime;
+        }
+
+        return false;
+    };
+
+    /**
+     * Wait for the card of a job to be rendered, scrolling it into view
+     *
+     * The results list is virtualized: only the items close to the viewport hold a rendered
+     * card, so an item must be brought into view before any of its fields can be read. An item
+     * that is not in the list at all is a different answer, and the caller is told so: LinkedIn
+     * re-renders the list while the loop walks it, and an id read from a render that no longer
+     * exists is not a job that failed to load.
+     *
+     * @param {Page} page
+     * @param {string} jobId
+     * @param {number} timeout seconds
+     * @returns {Promise<ILoadCardResult>}
+     * @static
+     * @private
+     */
+    private static _loadJobCard = async (
+        page: Page,
+        jobId: string,
+        timeout: number = LOAD_JOB_CARD_TIMEOUT,
+    ): Promise<ILoadCardResult> => {
+        const sleepTime = LOAD_JOB_CARD_POLL_INTERVAL;
+        let elapsed = 0;
+        let missingFor = 0;
+
+        while (elapsed < timeout) {
+            let state: string | null;
+
+            try {
+                state = await page.evaluate(
+                    (itemSelector: string, cardSelector: string) => {
+                        const item = document.querySelector(itemSelector);
+
+                        if (!item) {
+                            return 'missing';
+                        }
+
+                        if (item.querySelector(cardSelector)) {
+                            return 'rendered';
+                        }
+
+                        item.scrollIntoView({ block: 'center' });
+                        return 'pending';
+                    },
+                    getJobItemSelector(jobId),
+                    selectors.jobs,
+                );
+            }
+            catch (err) {
+                // page.evaluate rejects while the document is being replaced
+                state = null;
+            }
+
+            if (state === 'rendered') {
+                return { success: true, missing: false };
+            }
+
+            if (state === 'missing') {
+                missingFor += sleepTime;
+
+                if (missingFor >= MISSING_ITEM_GRACE) {
+                    break;
+                }
+            }
+            else {
+                missingFor = 0;
+            }
+
+            await sleep(sleepTime * 1000);
+            elapsed += sleepTime;
+        }
+
+        if (missingFor >= MISSING_ITEM_GRACE) {
+            return { success: false, missing: true, error: `Job ${jobId} is no longer in the results list` };
+        }
+
+        return { success: false, missing: false, error: `Timeout on rendering job card ${jobId}` };
+    };
+
+    /**
+     * Wait for the results list to be rendered
+     * @param {Page} page
+     * @param {number} timeout seconds
+     * @returns {Promise<boolean>}
+     * @static
+     * @private
+     */
+    private static _waitForContainer = async (
+        page: Page,
+        timeout: number = CONTAINER_WAIT_TIMEOUT,
+    ): Promise<boolean> => {
+        try {
+            await page.waitForSelector(selectors.container, { timeout: timeout * 1000 });
+            return true;
+        }
+        catch (err) {
+            return false;
+        }
+    };
+
+    /**
+     * Wait for the results list to hold at least one item
+     * @param {Page} page
+     * @param {string} tag
+     * @param {number} timeout seconds
+     * @returns {Promise<boolean>}
+     * @static
+     * @private
+     */
+    private static _waitForJobItems = async (
+        page: Page,
+        tag: string,
+        timeout: number = CONTAINER_WAIT_TIMEOUT,
+    ): Promise<boolean> => {
+        const sleepTime = CONTAINER_WAIT_POLL_INTERVAL;
+        let elapsed = 0;
+
+        logger.debug(tag, 'Waiting for new jobs to load');
+
+        while (elapsed < timeout) {
+            let items: number | null;
+
+            try {
+                items = await page.evaluate(
+                    (itemsSelector: string) => document.querySelectorAll(itemsSelector).length,
+                    selectors.jobItems,
+                );
+            }
+            catch (err) {
+                // The document is replaced while the next page loads
+                items = null;
+            }
+
+            if (items) {
+                return true;
+            }
+
+            await sleep(sleepTime * 1000);
+            elapsed += sleepTime;
+        }
+
+        return false;
+    };
+
+    /**
+     * Return LinkedIn's approximate total result count, or -1 when it cannot be parsed
+     *
+     * The count sits either in a standalone element of the results header ("204,000+ results")
+     * or, combined with the query, in the results title span. A standalone count is preferred and
+     * the title is the fallback. It is matched by shape rather than by position, so a header
+     * carrying no count simply yields -1.
+     *
+     * @param {Page} page
+     * @returns {Promise<number>}
+     * @static
+     * @private
+     */
+    private static _readJobTotal = async (page: Page): Promise<number> => {
+        let raw: string;
 
         try {
-            while (elapsed < timeout) {
-                const jobsCount = await page.evaluate((selector) => {
-                    return document.querySelectorAll(selector).length;
-                }, selectors.jobs);
+            raw = await page.evaluate(
+                (titleSelector: string, countSelector: string) => {
+                    const pattern = /([\d,]+\+?)\s*results/i;
 
-                if (jobsCount > jobsTot) {
-                    return { success: true, count: jobsCount };
-                }
+                    // Prefer a standalone count element, then any small element in the header
+                    const candidates = Array.from(document.querySelectorAll<HTMLElement>(countSelector))
+                        .concat(Array.from(document.querySelectorAll<HTMLElement>('small')));
 
-                await sleep(pollingTime);
-                elapsed += pollingTime;
-            }
+                    for (const el of candidates) {
+                        const match = (el.innerText || el.textContent || '').match(pattern);
+                        if (match) {
+                            return match[1];
+                        }
+                    }
+
+                    // Fall back to the combined title
+                    const title = document.querySelector<HTMLElement>(titleSelector);
+
+                    if (title) {
+                        const match = (title.innerText || title.textContent || '').match(pattern);
+                        if (match) {
+                            return match[1];
+                        }
+                    }
+
+                    return '';
+                },
+                selectors.resultsCountTitle,
+                selectors.resultsCountStandalone,
+            );
         }
-        catch (err) {}
+        catch (err) {
+            return -1;
+        }
 
-        return {
-            success: false,
-            error: `Timeout on loading jobs`
-        };
+        if (!raw) {
+            return -1;
+        }
+
+        const parsed = parseInt(raw.replace(/,/g, '').replace(/\+/g, '').trim(), 10);
+        return Number.isNaN(parsed) ? -1 : parsed;
     };
 
     /**
@@ -259,70 +614,6 @@ export class AuthenticatedStrategy extends RunStrategy {
             success: false,
             error: `Timeout on loading job details`
         };
-    };
-
-    /**
-     * Try to paginate
-     * @param {Page} page
-     * @param {string} tag
-     * @param {string} paginationSize
-     * @param {number} timeout
-     * @returns {Promise<ILoadResult>}
-     * @static
-     * @private
-     */
-    private static _paginate = async (
-        page: Page,
-        tag: string,
-        paginationSize: number = 25,
-        timeout: number = 2000,
-    ): Promise<ILoadResult> => {
-        const url = new URL(page.url());
-
-        // Extract offset from url
-        let offset = parseInt(url.searchParams.get('start') || "0", 10);
-        offset += paginationSize;
-
-        // Update offset in url
-        url.searchParams.set('start', '' + offset);
-
-        logger.info(tag, 'Next offset: ', offset);
-        logger.info(tag, 'Opening', url.toString());
-
-        // Navigate new url
-        await page.goto(url.toString(), {
-            waitUntil: 'load',
-        });
-
-        const pollingTime = 100;
-        let elapsed = 0;
-        let loaded = false;
-
-        logger.info(tag, 'Waiting for new jobs to load');
-
-        // Wait for new jobs to load
-        while (!loaded) {
-            loaded = await page.evaluate(
-                (selector) => {
-                    return document.querySelectorAll(selector).length > 0;
-                },
-                selectors.jobs,
-            );
-
-            if (loaded) return { success: true };
-
-            await sleep(pollingTime);
-            elapsed += pollingTime;
-
-            if (elapsed >= timeout) {
-                return {
-                    success: false,
-                    error: `Timeout on pagination`
-                };
-            }
-        }
-
-        return { success: true };
     };
 
     /**
@@ -456,10 +747,9 @@ export class AuthenticatedStrategy extends RunStrategy {
     };
 
     /**
-     * Extract the detail-panel fields for a single job and assemble the emitted payload. The panel
-     * must already be loaded. Card-derived and contextual fields are supplied by the caller; every
-     * other field is read here, document-scoped, so the search loop and the single-job path share
-     * a single extractor.
+     * Read every detail-panel field of the currently open job and assemble the emitted payload.
+     * Shared by the search loop and by scrapeJob: the caller supplies the card-derived and
+     * contextual fields, and everything panel/document-scoped is read here.
      * @param {Page} page
      * @param {CDPSession} cdpSession
      * @param {IExtractJobDataParams} params
@@ -747,6 +1037,146 @@ export class AuthenticatedStrategy extends RunStrategy {
     };
 
     /**
+     * Report a refusal to the pacer, saying so when it makes the run slower
+     * @param {string} tag
+     * @private
+     */
+    private _slowDown = (tag: string): void => {
+        const pacer = this.scraper.pacer;
+        const before = pacer.delay;
+        const after = pacer.throttled();
+
+        if (after > before) {
+            logger.warn(tag, `LinkedIn is throttling this run, slowing to ${Math.round(after * 100) / 100}s between jobs`);
+        }
+    };
+
+    /**
+     * Report a unit of work nobody refused, saying so when it makes the run faster
+     * @param {string} tag
+     * @private
+     */
+    private _speedUp = (tag: string): void => {
+        const pacer = this.scraper.pacer;
+        const before = pacer.delay;
+        const after = pacer.clean();
+
+        if (after < before) {
+            logger.info(tag, `No refusals for a while, easing to ${Math.round(after * 100) / 100}s between jobs`);
+        }
+    };
+
+    /**
+     * Copy the state of the pacer onto the metrics about to be reported. The pacer is per run and
+     * the metrics per location, so these read as what this location saw of a limit that is really
+     * the whole account's.
+     * @param {IMetrics} metrics
+     * @private
+     */
+    private _recordPace = (metrics: IMetrics): void => {
+        metrics.throttled = this.scraper.pacer.throttledCount;
+        metrics.pace = Math.round(this.scraper.pacer.delay * 100) / 100;
+    };
+
+    /**
+     * Emit the begin event carrying LinkedIn's approximate total result count. Fired once per
+     * location, before the pagination loop delivers any job. A count that cannot be read is
+     * reported as -1 rather than aborting the run.
+     * @param {Page} page
+     * @param {string} tag
+     * @private
+     */
+    private _emitBegin = async (page: Page, tag: string): Promise<void> => {
+        const jobTotal = await AuthenticatedStrategy._readJobTotal(page);
+        logger.debug(tag, `Total results reported by LinkedIn: ${jobTotal}`);
+        this.scraper.emit(events.scraper.begin, { jobTotal });
+    };
+
+    /**
+     * Open a url and wait for its page, asking again while LinkedIn answers with a throttle
+     *
+     * A 429 is the one failure that time alone fixes, so it is the one failure worth sitting
+     * through: each refused attempt waits the next step of the ladder out and reports to the
+     * pacer. The refusal is read both from the navigation response and from the throttle marker
+     * left on the rendered page, so a throttle that arrives without a response object is still
+     * caught. Every other outcome is handed straight back to the caller.
+     *
+     * @param {Page} page
+     * @param {string} tag
+     * @param {string} url
+     * @param {(page: Page) => Promise<boolean>} wait returns whether the page arrived
+     * @returns {Promise<IOpenResult>}
+     * @private
+     */
+    private _openAndWait = async (
+        page: Page,
+        tag: string,
+        url: string,
+        wait: (page: Page) => Promise<boolean>,
+    ): Promise<IOpenResult> => {
+        for (const delay of [0, ...THROTTLE_BACKOFF_DELAYS]) {
+            if (delay) {
+                const waited = jitteredBackoff(delay);
+                logger.warn(tag, `LinkedIn is throttling this run (HTTP ${THROTTLED_STATUS}), waiting ${Math.round(waited * 10) / 10}s before asking again`);
+                await sleep(waited * 1000);
+            }
+
+            logger.info(tag, `Opening ${url}`);
+
+            let response;
+
+            try {
+                response = await page.goto(url, { waitUntil: 'load' });
+            }
+            catch (err) {
+                logger.warn(tag, 'Failed to open the page', err);
+                return { success: false, throttled: false };
+            }
+
+            await sleep(this.scraper.pacer.delay * 1000);
+
+            if (await wait(page)) {
+                // A page that arrived is deliberately not reported as clean work: the unit the
+                // pacer eases on is a job, and there are far more jobs than navigations.
+                return { success: true, throttled: false };
+            }
+
+            // A refusal is read from the navigation response and from the throttle marker the
+            // rendered page carries, so neither a null response nor a body Chrome has replaced
+            // with its own error page hides it.
+            const throttledByResponse = !!(response && response.status() === THROTTLED_STATUS);
+            const throttledByPage = await isThrottled(page);
+
+            if (!(throttledByResponse || throttledByPage)) {
+                return { success: false, throttled: false };
+            }
+
+            // One report per refused attempt, so the pacer and the backoff count the same events
+            this._slowDown(tag);
+        }
+
+        logger.warn(tag, `LinkedIn kept throttling this run after ${THROTTLE_BACKOFF_DELAYS.length} waits. Raise pacing.baseDelay, or reduce concurrency, to ask for less`);
+
+        return { success: false, throttled: true };
+    };
+
+    /**
+     * Open the next page of results and wait for its list to be rendered
+     * @param {Page} page
+     * @param {string} url the page to open, carrying its own `start` offset
+     * @param {string} tag
+     * @returns {Promise<IOpenResult>}
+     * @private
+     */
+    private _paginate = async (
+        page: Page,
+        url: string,
+        tag: string,
+    ): Promise<IOpenResult> => {
+        return this._openAndWait(page, tag, url, (p) => AuthenticatedStrategy._waitForJobItems(p, tag));
+    };
+
+    /**
      * Scrape a single job by its id, bypassing search and pagination
      *
      * A standalone /jobs/view/<id> page is obfuscated, so the job is opened inside a search
@@ -769,20 +1199,29 @@ export class AuthenticatedStrategy extends RunStrategy {
     ): Promise<void> => {
         const tag = `[job:${jobId}]`;
 
-        // Navigate to home page first to set the session cookie
+        // Navigate to home page first, so the session can be established for the domain on screen
         logger.debug(tag, "Opening", urls.home);
 
         await page.goto(urls.home, {
             waitUntil: 'load',
         });
 
-        // Set cookie
-        logger.info("Setting authentication cookie");
-        await page.browser().setCookie({
-            name: "li_at",
-            value: config.LI_AT_COOKIE!,
-            domain: ".www.linkedin.com"
-        });
+        // Mask the headless User-Agent before any authenticated request carries it.
+        await maskUserAgent(page);
+
+        // Establish the session for the configured mode, minting a fresh cookie where possible.
+        const liAt = await authenticate(page.browser(), page, this._authConfig, tag);
+
+        if (!liAt) {
+            logger.error(tag, "Could not establish a session. Check the documentation on how to authenticate.");
+            this.scraper.emit(events.scraper.invalidSession);
+            throw new InvalidCookieException("Could not establish a session for the scraper.");
+        }
+
+        // The first session established is the baseline for detecting a rotation by end of run.
+        if (this._initialLiAt === undefined) {
+            this._initialLiAt = liAt;
+        }
 
         // The currentJobId render depends on a search context, so the url carries a throwaway
         // keywords value alongside the requested job id
@@ -800,19 +1239,20 @@ export class AuthenticatedStrategy extends RunStrategy {
             waitUntil: 'load',
         });
 
-        // Verify session
-        if (!(await AuthenticatedStrategy._isAuthenticatedSession(page))) {
-            logger.error("The provided session cookie is invalid. Check the documentation on how to obtain a valid session cookie.");
-            this.scraper.emit(events.scraper.invalidSession);
-            return;
-        }
-
         // Wait for the requested job's detail panel to render and settle
         const panelLoaded = await AuthenticatedStrategy._waitForJobPanel(page, jobId);
 
         if (!panelLoaded) {
+            // A throttle empties the jar and leaves no panel: it must not be read as the job being
+            // gone. Time alone clears a 429, so it is surfaced as an error rather than a notFound.
+            if (await isThrottled(page)) {
+                logger.warn(tag, "LinkedIn throttled the request, cannot confirm job");
+                this.scraper.emit(events.scraper.error, `${tag}\tLinkedIn throttled the request (HTTP ${THROTTLED_STATUS}), cannot confirm job ${jobId}`);
+                return;
+            }
+
             // A lost session tells us nothing about the job itself, surface it as invalidSession
-            if (!(await AuthenticatedStrategy._isAuthenticatedSession(page))) {
+            if (await isSessionInvalid(page)) {
                 logger.warn(tag, "Session is invalid, cannot confirm job");
                 this.scraper.emit(events.scraper.invalidSession);
                 return;
@@ -909,10 +1349,11 @@ export class AuthenticatedStrategy extends RunStrategy {
             failed: 0,
             missed: 0,
             skipped: 0,
+            throttled: this.scraper.pacer.throttledCount,
+            pace: this.scraper.pacer.delay,
         };
 
         let paginationIndex = query.options?.pageOffset || 0;
-        let paginationSize = 25;
 
         // Number of times the session has been rebuilt for this location.
         let recoveries = 0;
@@ -923,6 +1364,8 @@ export class AuthenticatedStrategy extends RunStrategy {
         await page.goto(urls.home, {
             waitUntil: 'load',
         });
+
+        await sleep(this.scraper.pacer.delay * 1000);
 
         // Mask the headless User-Agent before any authenticated request carries it.
         await maskUserAgent(page);
@@ -943,20 +1386,14 @@ export class AuthenticatedStrategy extends RunStrategy {
 
         // Override start by the page offset
         const _url = new URL(url);
-        _url.searchParams.set('start', `${paginationIndex * paginationSize}`);
+        _url.searchParams.set('start', `${paginationIndex * PAGINATION_SIZE}`);
         url = _url.href;
 
-        // Open search url
-        logger.info(tag, "Opening", url);
+        // Open search url, sitting through any throttle
+        let currentUrl = url;
+        const openResult = await this._openAndWait(page, tag, currentUrl, AuthenticatedStrategy._waitForContainer);
 
-        await page.goto(url, {
-            waitUntil: 'load',
-        });
-
-        try {
-            await page.waitForSelector(selectors.container, { timeout: 5000 });
-        }
-        catch(err: any) {
+        if (!openResult.success) {
             // A missing container on a valid session is genuinely no jobs; on an invalid one the
             // pagination loop below rebuilds the session and re-opens the page.
             if (!(await isSessionInvalid(page))) {
@@ -965,9 +1402,22 @@ export class AuthenticatedStrategy extends RunStrategy {
             }
         }
 
+        // A limit of 0 means "scrape everything LinkedIn will serve": the loops run without a
+        // processed count cap, stopping instead when a page yields no new job id or the pagination
+        // ceiling is reached.
+        const limit = query.options!.limit!;
+        const isUnlimited = limit === 0;
+
+        // Jobs already delivered are remembered for the whole location, covering LinkedIn
+        // re-rendering a card it has already shown.
+        const processedIds = new Set<string>();
+
+        // begin carries the total result count and must fire exactly once per location.
+        let beginEmitted = false;
+
         // Pagination loop
-        while (metrics.processed < query.options!.limit!) {
-            // Verify session in the loop
+        while (isUnlimited || metrics.processed < limit) {
+            // Verify session in the loop, rebuilding it through the recovery ladder when it is gone
             if (await isSessionInvalid(page)) {
                 // A bare li_at cannot be renewed, so recovery is futile: fail fast.
                 if (this._authConfig.mode === "liAt") {
@@ -991,7 +1441,7 @@ export class AuthenticatedStrategy extends RunStrategy {
                 recoveries += 1;
                 logger.warn(tag, "Session is no longer valid, rebuilding it and re-opening this page");
 
-                if (!(await this._reopenResults(page.browser(), page, url, tag))) {
+                if (!(await this._reopenResults(page.browser(), page, currentUrl, tag))) {
                     return { exit: false };
                 }
 
@@ -1005,38 +1455,78 @@ export class AuthenticatedStrategy extends RunStrategy {
             await AuthenticatedStrategy._acceptCookies(page, tag);
             await AuthenticatedStrategy._acceptPrivacy(page, tag);
 
-            let jobIndex = 0;
+            // Jobs are addressed by id, never by their position among the rendered cards: LinkedIn
+            // renders only a handful of cards at a time and drops the others from the DOM, so
+            // positions shift while the loop runs. The first read waits for the preliminary render
+            // to be replaced.
+            const jobIds = await AuthenticatedStrategy._waitForStableJobIds(page);
 
-            // Get number of all job links in the page
-            let jobsTot = await page.evaluate(
-                (selector) => document.querySelectorAll(selector).length,
-                selectors.jobs
-            );
+            if (!beginEmitted) {
+                beginEmitted = true;
+                await this._emitBegin(page, tag);
+            }
 
-            if (jobsTot === 0) {
-                logger.info(tag, `No jobs found, skip`);
+            // LinkedIn serves the last page repeatedly once results run out, so in an unlimited run
+            // a page carrying no id that has not already been processed marks the end of results.
+            if (isUnlimited && jobIds.length && jobIds.every(jobId => processedIds.has(jobId))) {
+                logger.info(tag, 'No new jobs on this page, results exhausted');
                 break;
             }
 
-            // Jobs loop
-            while (jobIndex < jobsTot && metrics.processed < query.options!.limit!) {
-                tag = `[${query.query}][${location}][${paginationIndex * paginationSize + jobIndex + 1}]`;
+            const knownIds = new Set<string>(jobIds);
+            let nextIndex = 0;
 
-                let jobId;
-                let jobLink;
-                let jobTitle;
-                let jobCompany;
-                let jobCompanyImgLink;
-                let jobPlace;
-                let jobDate: string = "";
-                let loadDetailsResult;
-                let jobIsPromoted = false;
+            // Jobs loop
+            while (isUnlimited || metrics.processed < limit) {
+                // The id list grows as the page is scrolled, so it is re-read on every iteration
+                for (const knownId of await AuthenticatedStrategy._getJobIds(page)) {
+                    if (!knownIds.has(knownId)) {
+                        knownIds.add(knownId);
+                        jobIds.push(knownId);
+                    }
+                }
+
+                if (nextIndex >= jobIds.length) {
+                    if (!(await AuthenticatedStrategy._loadMoreJobs(page, jobIds.length))) {
+                        break;
+                    }
+                    continue;
+                }
+
+                const jobIndex = nextIndex;
+                const jobId = jobIds[jobIndex];
+                nextIndex += 1;
+
+                if (processedIds.has(jobId)) {
+                    logger.debug(tag, `Job ${jobId} was already processed, skip`);
+                    continue;
+                }
+
+                await sleep(this.scraper.pacer.delay * 1000);
+                tag = `[${query.query}][${location}][${paginationIndex * PAGINATION_SIZE + jobIndex + 1}]`;
+
                 let jobData: IData | undefined;
 
                 try {
+                    // Wait for the card of this job to be rendered before reading it
+                    const loadCardResult = await AuthenticatedStrategy._loadJobCard(page, jobId);
+
+                    if (!loadCardResult.success) {
+                        // An id that left the list belongs to a render LinkedIn has since thrown
+                        // away, so there is no job here to have failed
+                        if (loadCardResult.missing) {
+                            logger.debug(tag, loadCardResult.error);
+                            continue;
+                        }
+
+                        logger.error(tag, loadCardResult.error);
+                        metrics.failed += 1;
+                        continue;
+                    }
+
                     // Extract job main fields
                     logger.debug(tag, 'Evaluating selectors', [
-                        selectors.jobs,
+                        selectors.jobItems,
                         selectors.link,
                         selectors.title,
                         selectors.company,
@@ -1046,15 +1536,19 @@ export class AuthenticatedStrategy extends RunStrategy {
 
                     const jobFieldsResult = await page.evaluate(
                         (
-                            jobsSelector: string,
+                            jobItemSelector: string,
                             linkSelector: string,
                             titleSelector: string,
                             companySelector: string,
                             placeSelector: string,
                             dateSelector: string,
-                            jobIndex: number
                         ) => {
-                            const job = document.querySelectorAll(jobsSelector)[jobIndex];
+                            const job = document.querySelector(jobItemSelector);
+
+                            if (!job) {
+                                return null;
+                            }
+
                             const link = job.querySelector(linkSelector) as HTMLElement;
 
                             // Click job link and scroll
@@ -1065,8 +1559,6 @@ export class AuthenticatedStrategy extends RunStrategy {
                             const protocol = window.location.protocol + "//";
                             const hostname = window.location.hostname;
                             const jobLink = protocol + hostname + link.getAttribute("href");
-
-                            const jobId = job.getAttribute("data-job-id");
 
                             let title = job.querySelector(titleSelector) ?
                                 (<HTMLElement>job.querySelector(titleSelector)).innerText : "";
@@ -1094,7 +1586,6 @@ export class AuthenticatedStrategy extends RunStrategy {
                                 .find(e => e.innerText === 'Promoted'));
 
                             return {
-                                jobId,
                                 jobLink,
                                 title,
                                 company,
@@ -1104,57 +1595,48 @@ export class AuthenticatedStrategy extends RunStrategy {
                                 isPromoted,
                             };
                         },
-                        selectors.jobs,
+                        getJobItemSelector(jobId),
                         selectors.link,
                         selectors.title,
                         selectors.company,
                         selectors.place,
                         selectors.date,
-                        jobIndex
                     );
 
-                    jobId = jobFieldsResult.jobId;
-                    jobLink = jobFieldsResult.jobLink;
-                    jobTitle = jobFieldsResult.title;
-                    jobCompany = jobFieldsResult.company;
-                    jobCompanyImgLink = jobFieldsResult.companyImgLink;
-                    jobPlace = jobFieldsResult.place;
-                    jobDate = jobFieldsResult.date ?? "";
-                    jobIsPromoted = jobFieldsResult.isPromoted;
+                    if (!jobFieldsResult) {
+                        logger.error(tag, `Job ${jobId} card could not be read`);
+                        metrics.failed += 1;
+                        continue;
+                    }
+
+                    const jobLink = jobFieldsResult.jobLink;
+                    const jobTitle = jobFieldsResult.title;
+                    const jobCompany = jobFieldsResult.company;
+                    const jobCompanyImgLink = jobFieldsResult.companyImgLink;
+                    const jobPlace = jobFieldsResult.place;
+                    const jobDate = jobFieldsResult.date ?? "";
+                    const jobIsPromoted = jobFieldsResult.isPromoted;
 
                     // Promoted job
                     if (query.options?.skipPromotedJobs && jobIsPromoted) {
                         logger.info(tag, 'Skipped because promoted');
                         metrics.skipped += 1;
-                        jobIndex += 1;
-
-                        if (metrics.processed < query.options!.limit! && jobIndex === jobsTot && jobsTot < paginationSize) {
-                            const loadJobsResult = await AuthenticatedStrategy._loadJobs(page, jobsTot);
-
-                            if (loadJobsResult.success) {
-                                jobsTot = loadJobsResult.count;
-                            }
-                        }
-
-                        if (jobIndex === jobsTot) {
-                            break;
-                        }
-                        else {
-                            continue;
-                        }
+                        continue;
                     }
+
+                    await sleep(this.scraper.pacer.delay * 1000);
 
                     // Try to load job details and extract job link
                     logger.debug(tag, 'Evaluating selectors', [
-                        selectors.jobs,
+                        selectors.jobItems,
                     ]);
 
-                    loadDetailsResult = await AuthenticatedStrategy._loadJobDetails(page, jobId!);
+                    const loadDetailsResult = await AuthenticatedStrategy._loadJobDetails(page, jobId);
 
                     // Check if loading job details has failed
                     if (!loadDetailsResult.success) {
                         logger.error(tag, loadDetailsResult.error);
-                        jobIndex += 1;
+                        metrics.failed += 1;
                         continue;
                     }
 
@@ -1162,7 +1644,7 @@ export class AuthenticatedStrategy extends RunStrategy {
                     jobData = await AuthenticatedStrategy._extractJobData(page, cdpSession, {
                         query: query.query || "",
                         location: location,
-                        jobId: jobId!,
+                        jobId: jobId,
                         jobIndex: jobIndex,
                         link: jobLink,
                         title: jobTitle,
@@ -1178,9 +1660,14 @@ export class AuthenticatedStrategy extends RunStrategy {
                 catch(err: any) {
                     const errorMessage = `${tag}\t${err.message}`;
                     this.scraper.emit(events.scraper.error, errorMessage);
-                    jobIndex++;
                     metrics.failed++;
                     continue;
+                }
+                finally {
+                    // Every job counts as one unit of clean work the moment it is done with,
+                    // however it ended: a job whose details a throttle refused has already reported
+                    // that refusal through the response listener.
+                    this._speedUp(tag);
                 }
 
                 // Emit data (NB: should be outside of try/catch block to be properly tested)
@@ -1188,50 +1675,66 @@ export class AuthenticatedStrategy extends RunStrategy {
                     this.scraper.emit(events.scraper.data, jobData);
                 }
 
-                jobIndex += 1;
                 metrics.processed += 1;
+                processedIds.add(jobId);
                 logger.info(tag, `Processed`);
-
-                // Try fetching more jobs
-                if (metrics.processed < query.options!.limit! && jobIndex === jobsTot && jobsTot < paginationSize) {
-                    const loadJobsResult = await AuthenticatedStrategy._loadJobs(page, jobsTot);
-
-                    if (loadJobsResult.success) {
-                        jobsTot = loadJobsResult.count;
-                    }
-                }
-
-                if (jobIndex === jobsTot) {
-                    break;
-                }
             }
 
             tag = `[${query.query}][${location}]`;
 
+            if (!jobIds.length) {
+                logger.info(tag, `No jobs found, skip`);
+                break;
+            }
+
             logger.info(tag, 'No more jobs to process in this page');
 
             // Check if we reached the limit of jobs to process
-            if (metrics.processed === query.options!.limit!) {
+            if (!isUnlimited && metrics.processed === limit) {
                 logger.info(tag, 'Query limit reached!')
 
                 // Emit metrics
+                this._recordPace(metrics);
                 this.scraper.emit(events.scraper.metrics, metrics);
                 logger.info(tag, 'Metrics:', metrics);
 
                 break;
             }
             else {
-                metrics.missed += paginationSize - jobIndex;
-            }
+                metrics.missed += jobIds.length - nextIndex;
 
-            // Emit metrics
-            this.scraper.emit(events.scraper.metrics, metrics);
-            logger.info(tag, 'Metrics:', metrics);
+                // Emit metrics
+                this._recordPace(metrics);
+                this.scraper.emit(events.scraper.metrics, metrics);
+                logger.info(tag, 'Metrics:', metrics);
+            }
 
             // Try to paginate
             paginationIndex += 1;
+
+            // LinkedIn stops serving results past MAX_RESULTS_CEILING, so an unlimited run does
+            // not advance start beyond it.
+            if (isUnlimited && paginationIndex * PAGINATION_SIZE >= MAX_RESULTS_CEILING) {
+                logger.info(tag, `Reached the pagination ceiling of ${MAX_RESULTS_CEILING} results, LinkedIn serves no more past it, stop`);
+                break;
+            }
+
             logger.info(tag, `Pagination requested [${paginationIndex}]`);
-            const paginationResult = await AuthenticatedStrategy._paginate(page, tag);
+
+            const nextUrl = new URL(url);
+            nextUrl.searchParams.set('start', `${paginationIndex * PAGINATION_SIZE}`);
+            currentUrl = nextUrl.href;
+
+            let paginationResult = await this._paginate(page, currentUrl, tag);
+
+            // The next page does not always render on the first attempt, and giving up there costs
+            // every result past the first page. A throttled one is the exception: the backoff has
+            // already waited it out for as long as it is going to.
+            if (!paginationResult.success && !paginationResult.throttled) {
+                logger.warn(tag, 'Pagination failed, retrying');
+                await sleep(PAGINATION_RETRY_DELAY * 1000);
+                paginationResult = await this._paginate(page, currentUrl, tag);
+            }
 
             if (!paginationResult.success) {
                 logger.info(tag, `Couldn\'t find more jobs for the running query`);

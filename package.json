@@ -4,6 +4,10 @@
   "description": "Scrape public available jobs on Linkedin using headless browser",
   "main": "build/index.js",
   "types": "build/index.d.ts",
+  "bin": {
+    "linkedin-jobs-scraper": "build/cli/index.js",
+    "lijs": "build/cli/index.js"
+  },
   "engines": {
     "node": ">=22"
   },
@@ -27,6 +31,7 @@
   "author": "Ludovico Fabbri",
   "license": "MIT",
   "dependencies": {
+    "commander": "^14.0.3",
     "debug": "^4.4.3",
     "deepmerge": "^4.3.1",
     "puppeteer": "^25.8.0",

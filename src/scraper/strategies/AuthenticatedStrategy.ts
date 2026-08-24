@@ -74,7 +74,7 @@ export const selectors = {
     detailsPanel: '.jobs-search__job-details--container',
     detailsTop: '.jobs-details-top-card',
     details: '.jobs-details__main-content',
-    insights: '.job-details-jobs-unified-top-card__container--two-pane li',
+    insights: '.job-details-fit-level-preferences button',
     fitLevelButtons: '.job-details-fit-level-preferences button',
     salaryRailCard: '.jobs-details__salary-main-rail-card',
     applyButton: 'button.jobs-apply-button',

@@ -92,13 +92,16 @@ export const runLogin = async (config: CliConfig): Promise<number> => {
         credentials = await ensureSession(userDataDir, { timeoutMs: LOGIN_TIMEOUT_SECONDS * 1000 });
     } catch (err) {
         credentials = null;
+        console.error(err instanceof Error ? err.stack ?? err.message : String(err));
     }
 
     if (!credentials || !credentials.liAt) {
         printLine(
             "❌ " +
                 colorizer.red(
-                    "Timed out: no session was established. The profile is unchanged.",
+                    "No session was established. The profile is unchanged. " +
+                        "If a detail was printed above, that is the underlying error; " +
+                        "otherwise the login timed out.",
                 ),
         );
         return 1;

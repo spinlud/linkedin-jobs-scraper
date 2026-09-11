@@ -1,39 +1,58 @@
 # linkedin-jobs-scraper
-> Scrape public available jobs on Linkedin using a headless browser. For each job the following
-> fields are extracted: `jobId`, `title`, `company`, `[companyLink]`, `[companyEmployeeCount]`,
-> `[companyImgLink]`, `place`, `date`, `dateText`, `link`, `[applyLink]`, `description`,
-> `descriptionHTML`, `insights`, `[salary]`, `isEasyApply`, `[applicantCount]`, `[benefits]`,
-> `reposted`. <br><br>
+> Scrape public available jobs on Linkedin using a headless browser.
+
+* 🔑 **Session management**: long running session with auto recovery
+* 🐢 **Adaptive rate limiting**: auto adjust scraping speed to avoid rate limiting
+* 📄 **Fields parser**: `jobId`, `link`, `applyLink`, `title`, `company`, `companyLink`, `companyEmployeeCount`, `companyImgLink`, `place`, `description`, `descriptionHTML`, `date`, `dateText`, `insights`, `salary`, `isEasyApply`, `applicantCount`, `benefits`, `reposted`
+* 🔍 **Filters**: relevance, time, type, experience, industry, salary, remote, company
+* 📡 **Events hooks**: data, metrics, errors
+* 🚀 **Headless support**: can run in background
+* ⌨️ **Command line interface**: scrape straight from your shell, no code required
+* 🟢 **Programmatic API**: drive it from Node.js (TypeScript) with full control
+
 > It's also available an equivalent [package in python](https://github.com/spinlud/py-linkedin-jobs-scraper).
 
-<span style="color:red">⚠ **DISCLAIMER** This package is meant for personal or educational use only. All the data extracted by
-using this package is publicly available on the LinkedIn website and it remains owned by LinkedIn company.
-I am not responsible in any way for the inappropriate use of data extracted through this library.
-</span>
+> [!WARNING]
+> For personal or educational use only. All extracted data is publicly available on LinkedIn and remains
+> owned by LinkedIn. I am not responsible for any inappropriate use of data extracted through this library.
 
 ## Table of Contents
 
 <!-- toc -->
 
+* [Requirements](#requirements)
 * [Installation](#installation)
 * [Usage](#usage)
-* [LinkedinScraper](#linkedinscraper)
-* [Authenticated session](#authenticated-session)
-* [Rate limiting](#rate-limiting)
+  * [CLI](#cli)
+  * [Programmatic](#programmatic)
+  * [Pinning a location by geoId](#pinning-a-location-by-geoid)
+* [Authentication](#authentication)
+* [Adaptive Rate limiting](#adaptive-rate-limiting)
 * [Filters](#filters)
 * [Company filter](#company-filter)
-* [CLI](#cli)
-* [Logger](#logger)
+* [Logging](#logging)
 * [License](#license)
 
 <!-- toc stop -->
 
 
-## Installation
-Requires Node >= 22 and a local [Chrome](https://www.google.com/intl/en_us/chrome/) or
-[Chromium](https://www.chromium.org/getting-involved/download-chromium) (Puppeteer downloads one on
-install by default).
+## Requirements
+- [Chrome](https://www.google.com/intl/en_us/chrome/) or [Chromium](https://www.chromium.org/getting-involved/download-chromium)
+- Node >= 22
 
+Puppeteer automatically downloads a matching Chromium on install. You can also point the scraper at
+a Chrome/Chromium you already have (any option other than `pacing` and `auth` is forwarded to
+`puppeteer.launch`):
+
+```ts
+const scraper = new LinkedinScraper({
+    executablePath: '/path/to/chrome',
+});
+```
+
+
+## Installation
+Install package:
 ```shell
 npm install --save linkedin-jobs-scraper
 ```
@@ -41,10 +60,126 @@ npm install --save linkedin-jobs-scraper
 
 ## Usage
 
-This port is **authenticated only**: every run needs a LinkedIn session. The quickest way to
-provide one is the `LI_AT_COOKIE` environment variable holding your `li_at` session cookie; see
-[Authenticated session](#authenticated-session) for how to obtain it and for the other supported
-modes.
+Both a command line interface and a Node.js API are supported. Before your first scrape you need to authenticate once. The quickest way is the CLI:
+
+```sh
+lijs login --chrome-user-data-dir ~/.linkedin-jobs-scraper
+```
+
+See [Authentication](#authentication) for all the options (Chrome profile, cookie pair, headless
+machines).
+
+### CLI
+
+Installing the package also installs a command line interface. It mirrors the programmatic API but
+scrapes a single query per invocation.
+
+Two equivalent commands are installed:
+
+```sh
+linkedin-jobs-scraper --help   # full command
+lijs --help                    # short alias
+```
+
+Without a global install you can invoke it through `npx`:
+
+```sh
+npx linkedin-jobs-scraper --help
+```
+
+#### Subcommands
+
+#### `jobs`
+Search jobs matching the provided query, locations and filters:
+
+```sh
+lijs jobs "software engineer" --location "United States" --location "Remote" --limit 50 --chrome-user-data-dir <path>
+lijs jobs "data scientist" --geo-id 103644278 --time week --type full-time,contract \
+  --experience mid-senior --on-site-or-remote remote --base-salary 120k --apply-link --chrome-user-data-dir <path>
+```
+
+- Positional `query` — the search keywords.
+- `--location NAME` (repeatable) or `--geo-id ID` (repeatable) — mutually exclusive; a geoId
+  pins the search deterministically (see [Pinning a location by geoId](#pinning-a-location-by-geoid)).
+- `--limit N` — maximum jobs to scrape, `0` for unlimited (default `25`).
+- `--apply-link` — resolve the external apply link for each job (slower).
+- `--skip-promoted-jobs` — skip promoted jobs.
+- `--page-offset N` — number of result pages to skip (default `0`).
+
+Filters use kebab-case values. Single-valued: `--relevance {relevant,recent}`,
+`--time {any,day,week,month}`, `--base-salary {40k,60k,80k,100k,120k,140k,160k,180k,200k}`,
+`--company-jobs-url URL`. Repeatable or comma-separated: `--type` (`full-time`, `part-time`,
+`temporary`, `contract`, `internship`, `volunteer`, `other`), `--experience` (`internship`,
+`entry-level`, `associate`, `mid-senior`, `director`, `executive`), `--on-site-or-remote`
+(`on-site`, `remote`, `hybrid`), `--industry` (e.g. `software-development`, `banking`,
+`it-services`), `--job-function` (e.g. `engineering`, `sales`, `information-technology`),
+`--benefits` (e.g. `medical`, `vision`, `dental`), `--commitments` (e.g. `work-life-balance`,
+`social-impact`). Boolean toggles: `--easy-apply` (only LinkedIn Easy Apply jobs),
+`--under-10-applicants` (only jobs with fewer than 10 applicants). Run
+`lijs jobs --help` for the full list of values.
+
+#### `job`
+Lookup a single job id or a `/jobs/view/<id>` url, with an optional `--apply-link`:
+
+```sh
+lijs job 3690634839 --chrome-user-data-dir <path>
+lijs job https://www.linkedin.com/jobs/view/3690634839 --apply-link --chrome-user-data-dir <path>
+```
+
+#### `login`
+
+```sh
+linkedin-jobs-scraper login --chrome-user-data-dir ~/.linkedin-jobs-scraper
+```
+
+Opens a visible browser to sign in once into a reusable Chrome profile, then prints the reuse
+commands and the remember-me cookie pair ready to export. Requires `--chrome-user-data-dir`; also
+accepts `--chrome-executable-path`.
+
+#### Driver flags
+
+Shared by `jobs` and `job`: `--no-headless`, `--base-delay SECONDS`, `--no-adaptive`,
+`--page-load-timeout SECONDS`, `--chrome-executable-path PATH`, `--chrome-user-data-dir DIR`,
+`--interactive-login`.
+
+#### Output
+
+DATA is written to **stdout**; progress, metrics and errors go to **stderr**, so piping the data
+stream stays clean.
+
+- `-f`, `--out-format {table,jsonl,json,csv}` — output format.
+- `-o`, `--out-path PATH` — destination; `-` means stdout.
+- `--fields a,b,c` — comma-separated list of fields to emit.
+- `--all-fields` — emit every available field.
+- `--vertical` — render one field per line.
+- `--raw` — emit the raw record unformatted.
+
+When `--out-format` is omitted the format is inferred from the `--out-path` extension (`.csv`,
+`.json`, `.jsonl`); with no path it defaults to `table` on a TTY and `jsonl` when piped or written
+to a file.
+
+In the `table` format on a TTY, URL fields (`link`, `applyLink`, `companyLink`, `companyImgLink`)
+are rendered as clickable terminal hyperlinks (OSC 8): columns show a compact label while clicking
+opens the full URL. Structured formats (`jsonl`/`json`/`csv`) always carry the full, unmodified URLs.
+
+In the `table` format on a TTY, cell values are colour-coded per column to make rows easier to
+scan; `--no-color` (or the `NO_COLOR` environment variable) disables it.
+
+#### Global flags
+
+`--quiet`, `-v`/`-vv` (repeatable, increases verbosity), `--no-color`, `--version`. `--no-color` is
+accepted on every subcommand, before or after it.
+
+#### Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Success |
+| `1` | Generic error |
+| `2` | Invalid or refused session |
+| `3` | Job not found (`job`) |
+
+### Programmatic
 
 ```ts
 import {
@@ -55,141 +190,199 @@ import {
     experienceLevelFilter,
     onSiteOrRemoteFilter,
     baseSalaryFilter,
+    Location,
     events,
 } from "linkedin-jobs-scraper";
 
 (async () => {
-    // Each scraper instance is associated with one browser.
-    // Concurrent queries will run on different pages within the same browser instance.
-    // Authentication is mandatory: with LI_AT_COOKIE exported the session is picked up from the
-    // environment, or pass it explicitly through the `auth` option.
+    // Each scraper instance is associated with one browser. Concurrent queries run on different
+    // pages within the same browser instance. Any option other than `pacing` and `auth` is
+    // forwarded to puppeteer.launch.
     const scraper = new LinkedinScraper({
         headless: true,
         pacing: {
-            baseDelay: 2, // Floor on seconds slept between jobs. See "Rate limiting"
-            adaptive: true, // Slow down automatically when LinkedIn throttles the run
+            baseDelay: 0.8,   // Floor on seconds slept between jobs, to avoid 'Too many requests 429'. Min 0.2, default 0.8
+            adaptive: true,   // Slow down automatically when LinkedIn throttles the run, then ease back. See 'Adaptive Rate limiting'
         },
         args: [
             "--lang=en-GB",
         ],
     });
 
-    // Emitted once per query/location before scraping starts, carrying LinkedIn's approximate
-    // total result count (jobTotal is -1 when it could not be parsed).
+    // Fired once per query/location before scraping starts, carrying LinkedIn's approximate
+    // total result count (jobTotal is -1 when it could not be parsed)
     scraper.on(events.scraper.begin, (begin) => {
-        console.log("Approximate total results:", begin.jobTotal);
+        console.log("[ON_BEGIN]", begin.jobTotal);
     });
 
-    // Emitted once for each processed job
+    // Fired once for each successfully processed job
     scraper.on(events.scraper.data, (data) => {
-        console.log(
-            data.description.length,
-            data.descriptionHTML.length,
-            `Query='${data.query}'`,
-            `Location='${data.location}'`,
-            `Id='${data.jobId}'`,
-            `Title='${data.title}'`,
-            `Company='${data.company ? data.company : "N/A"}'`,
-            `CompanyLink='${data.companyLink ? data.companyLink : "N/A"}'`,
-            `CompanyImgLink='${data.companyImgLink ? data.companyImgLink : "N/A"}'`,
-            `Place='${data.place}'`,
-            `Date='${data.date}'`,
-            `DateText='${data.dateText}'`,
-            `Link='${data.link}'`,
-            `ApplyLink='${data.applyLink ? data.applyLink : "N/A"}'`,
-            `Salary='${data.salary ? data.salary : "N/A"}'`,
-            `IsEasyApply='${data.isEasyApply}'`,
-            `ApplicantCount='${data.applicantCount ? data.applicantCount : "N/A"}'`,
-            `Benefits='${data.benefits ? data.benefits.join(", ") : "N/A"}'`,
-            `Reposted='${data.reposted}'`,
-            `Insights='${data.insights}'`,
-        );
+        console.log("[ON_DATA]", data.title, data.company, data.companyLink, data.date, data.dateText,
+            data.link, data.insights, data.description.length);
     });
 
-    // Emitted once for each scraped page (25 jobs)
+    // Fired once for each page (25 jobs)
     scraper.on(events.scraper.metrics, (metrics) => {
-        console.log(
-            `Processed=${metrics.processed}`,
-            `Failed=${metrics.failed}`,
-            `Missed=${metrics.missed}`,
-            `Skipped=${metrics.skipped}`,
-            `Throttled=${metrics.throttled}`,
-            `Pace=${metrics.pace}s`,
+        console.log("[ON_METRICS]",
+            `processed=${metrics.processed}`,
+            `failed=${metrics.failed}`,
+            `missed=${metrics.missed}`,
+            `skipped=${metrics.skipped}`,
+            `throttled=${metrics.throttled}`,
+            `pace=${metrics.pace}s`,
         );
     });
 
-    scraper.on(events.scraper.error, (err) => {
-        console.error(err);
+    scraper.on(events.scraper.error, (error) => {
+        console.error("[ON_ERROR]", error);
     });
 
     scraper.on(events.scraper.end, () => {
-        console.log("All done!");
+        console.log("[ON_END]");
     });
-
-    // Custom function executed on browser side to extract job description [optional]
-    const descriptionFn = () => {
-        const description = document.querySelector<HTMLElement>(".jobs-description");
-        return description ? description.innerText.replace(/[\s\n\r]+/g, " ").trim() : "N/A";
-    };
 
     await scraper.run([
         {
+            options: {
+                limit: 27,  // Limit the number of jobs to scrape. Use 0 to scrape all available jobs (LinkedIn serves up to ~1000).
+            },
+        },
+        {
             query: "Engineer",
             options: {
-                locations: ["United States"], // This will override global options ["Europe"]
+                locations: ["Europe", new Location("103644278", "United States")],  // Plain name, or pin a geo by geoId. See 'Pinning a location by geoId'
+                applyLink: true,       // Try to extract the apply link (easy applies are skipped). Slower, because an extra page is navigated. Default false
+                skipPromotedJobs: true, // Skip promoted jobs. Default false
+                pageOffset: 2,          // How many pages to skip
+                limit: 5,
                 filters: {
-                    type: [typeFilter.FULL_TIME, typeFilter.CONTRACT],
-                    onSiteOrRemote: [onSiteOrRemoteFilter.REMOTE, onSiteOrRemoteFilter.HYBRID],
+                    companyJobsUrl: "https://www.linkedin.com/jobs/search/?f_C=1441%2C17876832%2C791962%2C2374003%2C18950635%2C16140%2C10440912&geoId=92000000",  // Filter by companies
+                    relevance: relevanceFilter.RECENT,
+                    time: timeFilter.MONTH,
+                    type: [typeFilter.FULL_TIME, typeFilter.INTERNSHIP],
+                    onSiteOrRemote: [onSiteOrRemoteFilter.REMOTE],
+                    experience: [experienceLevelFilter.MID_SENIOR],
                     baseSalary: baseSalaryFilter.SALARY_100K,
                 },
             },
         },
-        {
-            query: "Sales",
-            options: {
-                pageOffset: 2, // How many pages to skip. Default 0
-                limit: 10, // This will override the global option limit (33)
-                applyLink: true, // Try to extract the apply link. Slower, because an extra page is navigated. Default false
-                skipPromotedJobs: true, // Skip promoted jobs. Default false
-                descriptionFn: descriptionFn, // Custom job description processor [optional]
-            },
-        },
-    ], {
-        // Global options, merged individually with each query's options
-        locations: ["Europe"],
-        limit: 33,
-    });
+    ]);
 
     // Close browser
     await scraper.close();
 })();
 ```
 
+#### Additional data fields
 
-## LinkedinScraper
-Each `LinkedinScraper` instance is associated with one browser (Chromium) instance. Concurrent runs will be executed
- on different pages within the same browser. Package uses [puppeteer](https://github.com/puppeteer/puppeteer) under the hood
- to instantiate Chromium browser instances; the same browser options and events are supported.
- For more information about browser options see: [puppeteer launch options](https://pptr.dev/api/puppeteer.launchoptions).
- For more information about browser events see: [puppeteer browser events](https://pptr.dev/api/puppeteer.browser).
+Alongside the core fields, each `data` event also carries:
 
-`pacing` and `auth` are the two scraper-specific options; everything else on the options object is
-forwarded to `puppeteer.launch`.
+* `salary`: pay range when LinkedIn shows one (from the fit-level insight or the salary rail card), otherwise `undefined`.
+* `isEasyApply`: `true` when the listing uses LinkedIn Easy Apply, `false` for an external apply flow.
+* `applicantCount`: the applicant segment of the top card (e.g. `'27 applicants'`), otherwise `undefined`.
+* `benefits`: list of featured benefit labels, `undefined` when none are shown.
+* `reposted`: `true` when the listing was reposted (derived from the date text).
 
+`date` is an ISO `YYYY-MM-DD` string. It comes from the card's exact `<time datetime>` when
+available, otherwise it is approximated from the relative date text (weeks, months and years
+approximated at 7, 30 and 365 days), and is `''` only when no date text could be parsed.
 
-## Authenticated session
-The scraper requires a LinkedIn session (there is no anonymous mode). There are three ways to supply
-one:
+#### Scraping a single job
 
-**1. Chrome profile (recommended).** Sign in once into a Chrome profile that the scraper then
-reuses. The CLI `login` subcommand opens a visible browser for this:
+When you already know the job you want, `scrapeJob` fetches it directly by url or id, bypassing
+search and pagination. It accepts a bare numeric id, a full `/jobs/view/<id>` url, or a
+`?currentJobId=<id>` url, emits a single `data` event on success, and an `error` event (without
+raising) on failure. A dead or expired id, one that points to a job that no longer exists, emits a
+`notFound` event (carrying `{ jobId }`) rather than `error`, since a missing job is not a scraping
+error.
 
-```sh
-lijs login --chrome-user-data-dir ~/.linkedin-jobs-scraper
+```ts
+import { LinkedinScraper, events } from "linkedin-jobs-scraper";
+
+(async () => {
+    const scraper = new LinkedinScraper({
+        headless: true,
+        pacing: { baseDelay: 0.8 },
+    });
+
+    scraper.on(events.scraper.data, (data) => {
+        console.log("[ON_DATA]", data.title, data.company, data.companyLink, data.dateText, data.link,
+            data.insights, data.description.length);
+    });
+
+    scraper.on(events.scraper.error, (error) => {
+        console.error("[ON_ERROR]", error);
+    });
+
+    scraper.on(events.scraper.notFound, (data) => {
+        console.log("[ON_NOT_FOUND]", data.jobId);
+    });
+
+    // By bare id
+    await scraper.scrapeJob("4455383771");
+
+    // Or by full url
+    await scraper.scrapeJob("https://www.linkedin.com/jobs/view/4455383771/");
+
+    // Pass applyLink=true to also extract the external apply link (slower)
+    await scraper.scrapeJob("4455383771", { applyLink: true });
+
+    await scraper.close();
+})();
 ```
 
-Sign in there, ticking **"Keep me logged in"** so the profile can renew its own session. Then point
-the scraper at the same profile:
+The single-job path reads every field from the job detail panel, so a few card-only fields are not
+populated: `companyImgLink` and the promoted flag. `date` has no exact `<time datetime>` here, so
+it is approximated from `dateText`. `query`, `location` are empty and `jobIndex` is `-1`, as
+there is no search context.
+
+### Pinning a location by geoId
+
+A location entry can be a plain string (a place name LinkedIn resolves for you) or a `Location`
+that pins the geo deterministically through LinkedIn's own `geoId`:
+
+```ts
+import { Location } from "linkedin-jobs-scraper";
+
+new Location("103644278", "United States");
+```
+
+`geoId` is what pins the search: it is sent as the `geoId` URL param, and the `location=<name>`
+param is omitted entirely (LinkedIn lets `geoId` win over a name in a conflict). `name` is only a
+human label — it is used for logs and set on the `data` event's `location` field — so it can be
+anything, or left out (the `geoId` is then used as the label).
+
+To find a real `geoId`, run the search on LinkedIn in a browser, then read the `geoId=` value from
+the resolved URL.
+
+## Authentication
+
+The scraper needs a LinkedIn session. The **recommended and tested** way is a Chrome profile on a local machine (see below). The cookie-based modes are supported alternatives, but LinkedIn may refuse them in some environments (for example CI or a server), so they are not guaranteed everywhere. All modes keep the session alive on their own, so a long run is not interrupted when LinkedIn expires it.
+
+|  | Chrome profile (recommended) | Cookie pair |
+| --- | --- | --- |
+| Runs on | A machine with a display | No display needed (may be refused in some environments) |
+| Setup | Sign in once, in a browser window | Two environment variables |
+| Lasts | As long as the profile is kept | About a year |
+| Concurrency | One browser per profile directory | Unrestricted |
+
+Each mode can also be passed explicitly through the `auth` scraper option instead of the
+environment: `{ mode: "interactiveProfile", userDataDir }`, `{ mode: "rememberMe", liRm, bcookie }`,
+or `{ mode: "liAt", liAt }`.
+
+### 1. Chrome profile
+
+Sign in once into a Chrome profile that the scraper then reuses:
+
+```sh
+linkedin-jobs-scraper login --chrome-user-data-dir ~/.linkedin-jobs-scraper
+```
+
+A browser window opens on the sign in page. Sign in there, ticking **"Keep me logged in"** — that
+is what makes the profile reusable. The password is typed into the browser: nothing in this
+package reads, stores or transmits it.
+
+Then point the scraper at the same profile:
 
 ```ts
 const scraper = new LinkedinScraper({
@@ -197,240 +390,288 @@ const scraper = new LinkedinScraper({
 });
 ```
 
-On the CLI, `jobs` and `job` take `--chrome-user-data-dir <dir>` to reuse the profile, and
-`--interactive-login` to sign in by hand on the first run when the profile holds no session yet
-(requires `--chrome-user-data-dir` and a display).
+To skip the separate command and have the first run do the sign in instead, use
+`--interactive-login` on the CLI (`jobs`/`job`), which requires `--chrome-user-data-dir` and a
+display, and waits up to 10 minutes for a human. Leave it off anywhere nobody is watching, such as
+CI or a server. Chrome locks a profile directory, so a given profile is used by a single browser at
+a time.
 
-**2. Remember-me cookie pair.** Export the `li_rm` and `bcookie` values (both are required) that the
-`login` command prints at the end of a sign-in; LinkedIn mints a fresh session from them on each run:
+### 2. Cookie pair
+
+You can use LinkedIn's remember me cookies (`li_rm` and `bcookie`) as environment variables to obtain a session, an option when a browser window is not available (you still need a machine with a browser window to obtain them the first time). Both variables are required. LinkedIn may refuse this mode in some environments (for example CI), so it is not guaranteed everywhere; prefer the Chrome profile when you can.
 
 ```sh
 export LI_RM_COOKIE='<li_rm value>'
-export LI_BCOOKIE='<bcookie value>'
+export LI_BCOOKIE='<bcookie value>' # keep the double quote " characters the value contains
 node app.js
 ```
 
-**3. Bare `li_at` session cookie.** Copy the `li_at` cookie straight from your own Chrome browser.
-Sign in to LinkedIn, then open Chrome developer tools:
+Get the two values by running the sign in command above on a machine that has a display: it
+prints them at the end, quoted and ready to export.
+
+> [!WARNING]
+> Do not copy these two cookies out of your browser's developer tools:
+> use the sign in command described above instead.
+
+Setting `--chrome-user-data-dir` (or `auth.userDataDir`) as well is worth it if the host has storage that survives across runs:
+the session is then reused instead of being requested again at the start of each run.
+
+### Fallback: a bare session cookie
+
+`LI_AT_COOKIE` takes the `li_at` session cookie on its own. This one can be copied straight out of your own Chrome browser. Sign in, then open Chrome developer
+tools:
 
 ![](media/img3.png)
 
 Go to tab `Application`, then from the left panel select `Storage` -> `Cookies` ->
-`https://www.linkedin.com`. In the main view locate the row named `li_at` and copy the content of
-the `Value` column.
+`https://www.linkedin.com`, locate the row named `li_at` and copy the `Value` column.
 
 ![](media/img4.png)
-
-Set the environment variable `LI_AT_COOKIE` with the value obtained above, then run your application
-as normal:
 
 ```sh
 LI_AT_COOKIE=<your li_at cookie value here> node app.js
 ```
 
-This cookie cannot be renewed: LinkedIn expires it after a while, and a run that loses it stops.
-Expect to replace it by hand; prefer the Chrome profile or the remember-me pair when you can.
+This cookie cannot be renewed: LinkedIn expires it after a while, and a run that
+loses it stops. Expect to replace it by hand. As with the cookie pair, LinkedIn may refuse it in some environments; prefer the Chrome profile when you can.
 
-Each mode can also be passed explicitly through the `auth` option instead of the environment:
-`{ mode: "interactiveProfile", userDataDir }`, `{ mode: "rememberMe", liRm, bcookie }`, or
-`{ mode: "liAt", liAt }`.
+### Begin event
 
+`begin` (`scraper:begin`) fires once per query/location, before any job is scraped, carrying an
+approximate total result count for that search. `jobTotal` is `-1` when the count could not be
+parsed. Combined with `limit: 0` (scrape all available jobs, LinkedIn serves up to ~1000), it lets
+a caller know upfront roughly how many results a query has:
 
-## Rate limiting
-You may experience the following rate limiting warning during execution: `429 too many requests`.
-This means you are exceeding the number of requests per second allowed by the server (this is
-especially true with authenticated sessions, where the rate limits are much stricter). Pacing is
-controlled by the `pacing` option:
+```ts
+scraper.on(events.scraper.begin, (begin) => {
+    console.log("total results reported by LinkedIn:", begin.jobTotal);
+});
+```
 
-- `baseDelay`: seconds slept between jobs, the floor the pace never eases below. Minimum `0.2`,
-  default `0.8`.
-- `adaptive`: when `true` (default) `baseDelay` is only the fastest the run will ever go, not a
-  fixed delay: the run starts at that speed and slows itself down whenever LinkedIn pushes back,
-  then eases back towards `baseDelay`. Set it to `false` to keep `baseDelay` fixed.
+### Session events
 
-With adaptive pacing on:
+`sessionRefreshed` (`scraper:session-refreshed`) fires whenever the scraper ends up holding a
+session cookie different from the one it was given. Listen to it if you have nowhere else to store a
+session and want to reuse it on the next run:
+
+```ts
+scraper.on(events.scraper.sessionRefreshed, (session) => {
+    console.log("store this for the next run:", session.liAt);
+});
+```
+
+`invalidSession` (`scraper:invalid-session`) fires when every credential supplied was refused,
+immediately before the run aborts with `InvalidCookieException`. It takes no arguments:
+
+```ts
+scraper.on(events.scraper.invalidSession, () => {
+    console.log("LinkedIn refused every credential");
+});
+```
+
+### Not found event
+
+`notFound` (`scraper:not-found`) fires when a single-job scrape (`scrapeJob`) targets a job that
+does not exist or is no longer available. It carries `{ jobId }` for the id that was requested.
+Throttling and page-load failures stay a silent skip, since neither says anything about whether the
+job exists:
+
+```ts
+scraper.on(events.scraper.notFound, (data) => {
+    console.log("job no longer available:", data.jobId);
+});
+```
+
+## Adaptive Rate limiting
+
+Requests failing with the status code 429 mean you are sending too many requests and LinkedIn is
+throttling them. Pacing is controlled by the `pacing` option:
+
+- `baseDelay`: seconds slept between jobs. Higher is safer, at least `0.2`, default `0.8`.
+- `adaptive`: when `true` (default), `baseDelay` is only the fastest the run will ever go.
+
+`baseDelay` sets the fastest the run will ever go, not a fixed delay: with `adaptive` on
+(the default) the run starts at that speed and slows itself down whenever LinkedIn pushes back.
 
 - **On every 429**, the delay between jobs doubles, up to `min(10, baseDelay * 10)` seconds.
 - **After 20 jobs in a row without a 429**, the delay eases back towards `baseDelay`, and never
   goes below it.
 
-The `metrics` event reports both `throttled` (how many 429s the run has met) and `pace` (the delay
-currently slept between jobs).
+Pass `adaptive: false` to make `baseDelay` a fixed delay instead.
 
-```ts
-const scraper = new LinkedinScraper({
-    headless: true,
-    pacing: {
-        baseDelay: 2,
-        adaptive: true,
-    },
-    args: [
-        "--lang=en-GB",
-    ],
-});
-```
+There is no `max_workers` knob: a single scraper drives one browser and processes a run's locations
+sequentially behind a single pacer (LinkedIn rate-limits per account). If you still hit throttling,
+reduce the number of concurrent queries.
 
+The `metrics` event reports both numbers:
+
+- `throttled`: how many 429s the run has met.
+- `pace`: the delay currently slept between jobs.
 
 ## Filters
 
 It is possible to customize queries with the following filters:
-
 - RELEVANCE:
-  * `RELEVANT`
-  * `RECENT`
+    * `RELEVANT`
+    * `RECENT`
 - TIME:
-  * `ANY`
-  * `DAY`
-  * `WEEK`
-  * `MONTH`
+    * `ANY`
+    * `DAY`
+    * `WEEK`
+    * `MONTH`
 - TYPE:
-  * `FULL_TIME`
-  * `PART_TIME`
-  * `TEMPORARY`
-  * `CONTRACT`
-  * `INTERNSHIP`
-  * `VOLUNTEER`
-  * `OTHER`
+    * `FULL_TIME`
+    * `PART_TIME`
+    * `TEMPORARY`
+    * `CONTRACT`
+    * `INTERNSHIP`
+    * `VOLUNTEER`
+    * `OTHER`
 - EXPERIENCE LEVEL:
-  * `INTERNSHIP`
-  * `ENTRY_LEVEL`
-  * `ASSOCIATE`
-  * `MID_SENIOR`
-  * `DIRECTOR`
-  * `EXECUTIVE`
+    * `INTERNSHIP`
+    * `ENTRY_LEVEL`
+    * `ASSOCIATE`
+    * `MID_SENIOR`
+    * `DIRECTOR`
+    * `EXECUTIVE`
 - ON SITE OR REMOTE:
-  * `ON_SITE`
-  * `REMOTE`
-  * `HYBRID`
+    * `ON_SITE`
+    * `REMOTE`
+    * `HYBRID`
 - INDUSTRY:
-  * `AIRLINES_AVIATION`
-  * `BANKING`
-  * `CIVIL_ENGINEERING`
-  * `COMPUTER_GAMES`
-  * `ENVIRONMENTAL_SERVICES`
-  * `ELECTRONIC_MANUFACTURING`
-  * `FINANCIAL_SERVICES`
-  * `INFORMATION_SERVICES`
-  * `INVESTMENT_BANKING`
-  * `INVESTMENT_MANAGEMENT`
-  * `IT_SERVICES`
-  * `LEGAL_SERVICES`
-  * `MOTOR_VEHICLES`
-  * `OIL_GAS`
-  * `SOFTWARE_DEVELOPMENT`
-  * `STAFFING_RECRUITING`
-  * `TECHNOLOGY_INTERNET`
+    * `AIRLINES_AVIATION`
+    * `BANKING`
+    * `CIVIL_ENGINEERING`
+    * `COMPUTER_GAMES`
+    * `ENVIRONMENTAL_SERVICES`
+    * `ELECTRONIC_MANUFACTURING`
+    * `FINANCIAL_SERVICES`
+    * `INFORMATION_SERVICES`
+    * `INVESTMENT_BANKING`
+    * `INVESTMENT_MANAGEMENT`
+    * `IT_SERVICES`
+    * `LEGAL_SERVICES`
+    * `MOTOR_VEHICLES`
+    * `OIL_GAS`
+    * `SOFTWARE_DEVELOPMENT`
+    * `STAFFING_RECRUITING`
+    * `TECHNOLOGY_INTERNET`
 - BASE SALARY:
-  * `SALARY_40K`
-  * `SALARY_60K`
-  * `SALARY_80K`
-  * `SALARY_100K`
-  * `SALARY_120K`
-  * `SALARY_140K`
-  * `SALARY_160K`
-  * `SALARY_180K`
-  * `SALARY_200K`
+    * `SALARY_40K`
+    * `SALARY_60K`
+    * `SALARY_80K`
+    * `SALARY_100K`
+    * `SALARY_120K`
+    * `SALARY_140K`
+    * `SALARY_160K`
+    * `SALARY_180K`
+    * `SALARY_200K`
 - JOB FUNCTION:
-  * `ACCOUNTING_AUDITING`
-  * `ADMINISTRATIVE`
-  * `ADVERTISING`
-  * `BUSINESS_DEVELOPMENT`
-  * `CONSULTING`
-  * `DISTRIBUTION`
-  * `DESIGN`
-  * `EDUCATION`
-  * `ENGINEERING`
-  * `FINANCE`
-  * `GENERAL_BUSINESS`
-  * `HEALTH_CARE_PROVIDER`
-  * `HUMAN_RESOURCES`
-  * `INFORMATION_TECHNOLOGY`
-  * `LEGAL`
-  * `MANAGEMENT`
-  * `MANUFACTURING`
-  * `MARKETING`
-  * `OTHER`
-  * `PUBLIC_RELATIONS`
-  * `PRODUCT_MANAGEMENT`
-  * `PROJECT_MANAGEMENT`
-  * `QUALITY_ASSURANCE`
-  * `RESEARCH`
-  * `SALES`
-  * `SUPPLY_CHAIN`
-  * `TRAINING`
+    * `ACCOUNTING_AUDITING`
+    * `ADMINISTRATIVE`
+    * `ADVERTISING`
+    * `BUSINESS_DEVELOPMENT`
+    * `CONSULTING`
+    * `DISTRIBUTION`
+    * `DESIGN`
+    * `EDUCATION`
+    * `ENGINEERING`
+    * `FINANCE`
+    * `GENERAL_BUSINESS`
+    * `HEALTH_CARE_PROVIDER`
+    * `HUMAN_RESOURCES`
+    * `INFORMATION_TECHNOLOGY`
+    * `LEGAL`
+    * `MANAGEMENT`
+    * `MANUFACTURING`
+    * `MARKETING`
+    * `OTHER`
+    * `PUBLIC_RELATIONS`
+    * `PRODUCT_MANAGEMENT`
+    * `PROJECT_MANAGEMENT`
+    * `QUALITY_ASSURANCE`
+    * `RESEARCH`
+    * `SALES`
+    * `SUPPLY_CHAIN`
+    * `TRAINING`
 - BENEFITS:
-  * `MEDICAL`
-  * `VISION`
-  * `DENTAL`
-  * `RETIREMENT_401K`
-  * `PENSION_PLAN`
-  * `PAID_MATERNITY_LEAVE`
-  * `PAID_PATERNITY_LEAVE`
-  * `COMMUTER_BENEFITS`
-  * `STUDENT_LOAN_ASSISTANCE`
-  * `TUITION_ASSISTANCE`
-  * `DISABILITY_INSURANCE`
+    * `MEDICAL`
+    * `VISION`
+    * `DENTAL`
+    * `RETIREMENT_401K`
+    * `PENSION_PLAN`
+    * `PAID_MATERNITY_LEAVE`
+    * `PAID_PATERNITY_LEAVE`
+    * `COMMUTER_BENEFITS`
+    * `STUDENT_LOAN_ASSISTANCE`
+    * `TUITION_ASSISTANCE`
+    * `DISABILITY_INSURANCE`
 - COMMITMENTS:
-  * `DIVERSITY_EQUITY_INCLUSION`
-  * `ENVIRONMENTAL_SUSTAINABILITY`
-  * `WORK_LIFE_BALANCE`
-  * `SOCIAL_IMPACT`
-  * `CAREER_GROWTH_AND_LEARNING`
+    * `DIVERSITY_EQUITY_INCLUSION`
+    * `ENVIRONMENTAL_SUSTAINABILITY`
+    * `WORK_LIFE_BALANCE`
+    * `SOCIAL_IMPACT`
+    * `CAREER_GROWTH_AND_LEARNING`
 - EASY APPLY: `easyApply: true` restricts results to jobs with LinkedIn Easy Apply.
 - UNDER 10 APPLICANTS: `under10Applicants: true` restricts results to jobs with fewer than 10 applicants.
 - COMPANY:
-  * See below
+    * See below
 
-The package root exports the `relevanceFilter`, `timeFilter`, `typeFilter`,
-`experienceLevelFilter`, `onSiteOrRemoteFilter`, `baseSalaryFilter`, `industryFilter`,
-`jobFunctionFilter`, `benefitsFilter` and `commitmentsFilter` constants, so every filter can be
-referenced by name rather than by its raw LinkedIn code (the CLI exposes the same filters as
-`--industry`, `--job-function`, `--benefits` and `--commitments`). The `Location` class is exported
-too, letting `locations` be pinned to a LinkedIn geoId instead of a location name.
+The package root exports the `relevanceFilter`, `timeFilter`, `typeFilter`, `experienceLevelFilter`,
+`onSiteOrRemoteFilter`, `baseSalaryFilter`, `industryFilter`, `jobFunctionFilter`, `benefitsFilter`
+and `commitmentsFilter` constants, so every filter can be referenced by name rather than by its raw
+LinkedIn code (the CLI exposes the same filters as `--industry`, `--job-function`, `--benefits` and
+`--commitments`).
 
 See the following example for more details:
 
 ```ts
 import {
-  LinkedinScraper,
-  relevanceFilter,
-  timeFilter,
-  typeFilter,
-  experienceLevelFilter,
-  onSiteOrRemoteFilter,
-  baseSalaryFilter,
-  industryFilter,
-  Location,
-  events,
+    LinkedinScraper,
+    relevanceFilter,
+    timeFilter,
+    typeFilter,
+    experienceLevelFilter,
+    onSiteOrRemoteFilter,
+    industryFilter,
+    baseSalaryFilter,
+    jobFunctionFilter,
+    benefitsFilter,
+    commitmentsFilter,
 } from "linkedin-jobs-scraper";
 
-// jobFunctionFilter, benefitsFilter and commitmentsFilter are importable the same way.
-
-(async () => {
-  // [...]
-
-  await scraper.run({
-    query: "Software Engineer",
+const query = {
+    query: "Engineer",
     options: {
-      // A Location pins the search to a LinkedIn geoId; a plain string is looked up by name.
-      locations: [new Location("103644278", "United States")],
-      filters: {
-        relevance: relevanceFilter.RELEVANT,
-        time: timeFilter.MONTH,
-        type: [typeFilter.FULL_TIME, typeFilter.CONTRACT],
-        experience: [experienceLevelFilter.ENTRY_LEVEL, experienceLevelFilter.MID_SENIOR],
-        onSiteOrRemote: [onSiteOrRemoteFilter.REMOTE, onSiteOrRemoteFilter.HYBRID],
-        baseSalary: baseSalaryFilter.SALARY_100K,
-        industry: [industryFilter.SOFTWARE_DEVELOPMENT],
-        easyApply: true,
-        under10Applicants: true,
-      },
+        locations: ["United States"],
+        applyLink: true,
+        skipPromotedJobs: true,
+        limit: 5,
+        filters: {
+            relevance: relevanceFilter.RECENT,
+            time: timeFilter.MONTH,
+            type: [typeFilter.FULL_TIME, typeFilter.INTERNSHIP],
+            experience: [experienceLevelFilter.INTERNSHIP, experienceLevelFilter.MID_SENIOR],
+            onSiteOrRemote: [onSiteOrRemoteFilter.REMOTE],
+            industry: [industryFilter.IT_SERVICES],
+            baseSalary: baseSalaryFilter.SALARY_100K,
+            jobFunction: [jobFunctionFilter.ENGINEERING],
+            benefits: [benefitsFilter.MEDICAL, benefitsFilter.VISION],
+            commitments: [commitmentsFilter.WORK_LIFE_BALANCE],
+            easyApply: true,
+            under10Applicants: true,
+        },
     },
-  });
-
-  // [...]
-})();
+};
 ```
+
+### Industry Filter
+
+If you need an industry that is not listed in `industryFilter`, you can pass its raw LinkedIn code
+directly. To find the numeric code for the industry:
+ 1. Perform the search on LinkedIn in a browser, with the industry filter applied.
+ 2. The numeric code is in the URL, immediately after `f_I`. For example the URL
+https://www.linkedin.com/jobs/search/?currentJobId=3661007408&distance=25&f_E=3%2C4&f_I=43%2C46%2C41%2C45&f_JT=F%2CC&geoId=102257491&keywords=Product%20Owner&refresh=true contains text `f_I=43%2C46%2C41%2C45` indicating a filter is applied on industry codes 43, 46, 41 and 45.
 
 ### Company Filter
 
@@ -441,6 +682,7 @@ It is also possible to filter by company using the public company jobs url on Li
 
  ![](media/img1.png)
 
+
  4. Scroll down and locate `See all jobs` or `See jobs` button.
 
  ![](media/img2.png)
@@ -449,189 +691,30 @@ It is also possible to filter by company using the public company jobs url on Li
  6. Paste the link address in code as follows:
 
 ```ts
-// [...]
-
-await scraper.run({
-    query: "",
+const query = {
     options: {
         filters: {
-            // Copy link address here
+            // Paste link below
             companyJobsUrl: "https://www.linkedin.com/jobs/search/?f_C=1441%2C17876832%2C791962%2C2374003%2C18950635%2C16140%2C10440912&geoId=92000000",
         },
     },
-});
-
-// [...]
+};
 ```
 
-
-## CLI
-
-Installing the package also installs a command line interface: it scrapes straight from your shell,
-no code required. Two equivalent commands are installed, `linkedin-jobs-scraper` and the short alias
-`lijs`. The CLI mirrors the programmatic API but scrapes a single query per invocation.
-
-```sh
-linkedin-jobs-scraper --help   # full command
-lijs --help                    # short alias
-```
-
-Like the library, the CLI is authenticated only. Before your first scrape, sign in once (see
-[Authenticated session](#authenticated-session)):
-
-```sh
-lijs login --chrome-user-data-dir ~/.linkedin-jobs-scraper
-```
-
-### Subcommands
-
-#### `jobs [query]`
-Search and scrape jobs matching the query, locations and filters:
-
-```sh
-lijs jobs "software engineer" --location "United States" --location "Remote" --limit 50 \
-  --chrome-user-data-dir ~/.linkedin-jobs-scraper
-lijs jobs "data scientist" --geo-id 103644278 --time week --type full-time,contract \
-  --experience mid-senior --on-site-or-remote remote --base-salary 120k --apply-link \
-  --chrome-user-data-dir ~/.linkedin-jobs-scraper
-```
-
-#### `job <url-or-id>`
-Scrape a single job by a bare id or a `/jobs/view/<id>` url, with an optional `--apply-link`:
-
-```sh
-lijs job 3690634839 --chrome-user-data-dir ~/.linkedin-jobs-scraper
-lijs job https://www.linkedin.com/jobs/view/3690634839 --apply-link \
-  --chrome-user-data-dir ~/.linkedin-jobs-scraper
-```
-
-#### `login`
-Open a visible browser to sign in once into a reusable Chrome profile, then print the reuse commands
-and the remember-me cookie pair ready to export. Requires `--chrome-user-data-dir`; also accepts
-`--chrome-executable-path`.
-
-```sh
-lijs login --chrome-user-data-dir ~/.linkedin-jobs-scraper
-```
-
-### Global options
-
-Accepted on the program and on every subcommand, before or after it:
-
-| Flag | Description |
-| --- | --- |
-| `--no-color` | Disable coloured output (also honours the `NO_COLOR` environment variable). |
-| `--quiet` | Suppress non-error output. |
-| `-v`, `--verbose` | Increase verbosity, repeatable. `-v` enables info logs, `-vv` enables debug logs. |
-| `--version` | Print the version and exit. |
-
-### Driver options
-
-Shared by `jobs` and `job`:
-
-| Flag | Description | Default |
-| --- | --- | --- |
-| `--no-headless` | Run Chrome with a visible window. | headless |
-| `--base-delay <seconds>` | Floor on seconds slept between jobs (see [Rate limiting](#rate-limiting)). | `0.8` |
-| `--no-adaptive` | Keep the delay fixed instead of adapting to 429s. | adaptive |
-| `--page-load-timeout <seconds>` | Page load timeout in seconds (accepted for parity; not yet wired to a library knob). | `20` |
-| `--chrome-executable-path <path>` | Path to the Chrome executable. | |
-| `--chrome-user-data-dir <dir>` | Chrome profile directory kept across runs (also the authentication source). | |
-| `--interactive-login` | Sign in by hand into the profile before scraping (requires `--chrome-user-data-dir`). | |
-
-### Search options
-
-Accepted by `jobs`:
-
-| Flag | Description | Default |
-| --- | --- | --- |
-| `query` (positional) | The search keywords. | |
-| `--location <name>` | Location name, repeatable. Mutually exclusive with `--geo-id`. | |
-| `--geo-id <id>` | LinkedIn geoId, repeatable. Pins the search deterministically. Mutually exclusive with `--location`. | |
-| `--limit <n>` | Maximum jobs to scrape, `0` for unlimited (LinkedIn serves up to ~1000). | `25` |
-| `--apply-link` | Resolve the external apply link for each job (slower). | |
-| `--skip-promoted-jobs` | Skip promoted jobs. | |
-| `--page-offset <n>` | Number of result pages to skip. | `0` |
-| `--relevance <value>` | Sort order: `relevant`, `recent`. | |
-| `--time <value>` | Time posted: `any`, `day`, `week`, `month`. | |
-| `--base-salary <value>` | Minimum base salary: `40k`, `60k`, `80k`, `100k`, `120k`, `140k`, `160k`, `180k`, `200k`. | |
-| `--company-jobs-url <url>` | LinkedIn company jobs url for the company filter. | |
-| `--type <type>` | Job type, repeatable or comma-separated: `full-time`, `part-time`, `temporary`, `contract`, `internship`, `volunteer`, `other`. | |
-| `--experience <level>` | Experience level, repeatable or comma-separated: `internship`, `entry-level`, `associate`, `mid-senior`, `director`, `executive`. | |
-| `--on-site-or-remote <mode>` | Workplace, repeatable or comma-separated: `on-site`, `remote`, `hybrid`. | |
-| `--industry <industry>` | Industry, repeatable or comma-separated (e.g. `software-development`, `banking`, `it-services`). | |
-| `--job-function <function>` | Job function, repeatable or comma-separated (e.g. `engineering`, `sales`, `information-technology`). | |
-| `--benefits <benefit>` | Benefits, repeatable or comma-separated (e.g. `medical`, `vision`, `dental`). | |
-| `--commitments <commitment>` | Commitments, repeatable or comma-separated (e.g. `work-life-balance`, `social-impact`). | |
-| `--easy-apply` | Only jobs with LinkedIn Easy Apply. | |
-| `--under-10-applicants` | Only jobs with fewer than 10 applicants. | |
-
-Run `lijs jobs --help` for the full list of accepted values for each enum flag.
-
-### Output
-
-Scraped **data** is written to **stdout**; progress, metrics and errors go to **stderr**, so piping
-the data stream stays clean.
-
-| Flag | Description |
-| --- | --- |
-| `-f`, `--out-format <format>` | Output format: `table`, `jsonl`, `json`, `csv`. |
-| `-o`, `--out-path <path>` | Output destination; `-` means stdout. |
-| `--fields <fields>` | Comma-separated list of fields to emit. |
-| `--all-fields` | Emit every available field. |
-| `--vertical` | Render one field per line. |
-| `--raw` | Emit the raw record, without collapsing whitespace. |
-
-**Format inference.** An explicit `-f` always wins. Otherwise the format is inferred from the
-`--out-path` extension (`.csv`, `.json`, `.jsonl`); with no path it defaults to `table` on a TTY and
-`jsonl` when piped. `table` never goes to a file: a file destination downgrades it to `jsonl`.
-
-**Selectable fields (`--fields`).** In declaration order:
-`query`, `location`, `jobId`, `jobIndex`, `link`, `applyLink`, `title`, `company`, `companyLink`,
-`companyEmployeeCount`, `companyImgLink`, `place`, `date`, `dateText`, `description`,
-`descriptionHTML`, `insights`, `salary`, `isEasyApply`, `applicantCount`, `benefits`, `reposted`.
-
-When no fields are selected, the `table` format shows a default column set
-(`title`, `company`, `place`, `date`, `salary`, `applicantCount`, `benefits`, `reposted`, `link`);
-every other format emits all fields. `--all-fields` forces the full set in any format.
-
-**Table layout.** Each row is prefixed with an `index` column: a per-section ordinal that resets at
-the start of every `(query, location)` section. In `--vertical` mode there is no index column;
-instead each record is headed `── Job N ──`.
-
-**Clickable URLs.** In the `table` format on a TTY, URL fields (`link`, `applyLink`, `companyLink`,
-`companyImgLink`) are rendered as OSC 8 terminal hyperlinks: the cell shows a compact label while
-clicking opens the full URL. Structured formats (`jsonl`, `json`, `csv`) always carry the full,
-unmodified URLs.
-
-**Run summary.** At the end of a run a `done:` summary is printed to stderr. A single-location run
-prints one line, `done: processed=… failed=… missed=… skipped=… throttled=… pace=…s`. A
-multi-location run prints `done:` followed by one row per location
-(`processed=… failed=… missed=… skipped=…`) and a final `total` row that sums those counts and
-carries `throttled`/`pace` from the last location that reported metrics.
-
-### Exit codes
-
-| Code | Meaning |
-| --- | --- |
-| `0` | Success |
-| `1` | Generic error |
-| `2` | Invalid or refused session |
-| `3` | Job not found (`job`) |
-
-
-## Logger
-Logger uses the [debug](https://github.com/visionmedia/debug) package under the hood. The following namespaces are used:
+## Logging
+Logger uses the [debug](https://github.com/visionmedia/debug) package under the hood, with namespace
+root `scraper`. The following namespaces are used:
 * `scraper:debug`
 * `scraper:info`
 * `scraper:warn`
 * `scraper:error`
 
-Use the environment variable `DEBUG` or the programmatic API to selectively enable/disable one or more namespaces.
-Example:
+Use the environment variable `DEBUG` to selectively enable/disable one or more namespaces. When
+`DEBUG` is unset, `info`, `warn` and `error` are enabled by default. Example:
 
 ```sh
-DEBUG=scraper:info node app.js
+DEBUG=scraper:info node app.js   # only info
+DEBUG=scraper:* node app.js      # everything
 ```
 
 ## License

@@ -13,6 +13,12 @@ export {
     experienceLevelFilter,
     onSiteOrRemoteFilter,
     baseSalaryFilter,
+    industryFilter,
+    jobFunctionFilter,
+    benefitsFilter,
+    commitmentsFilter,
 } from "./filters";
+
+export { Location } from "./query";
 
 

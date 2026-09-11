@@ -1,5 +1,5 @@
 name: ci
-on: [ push, workflow_dispatch ]
+on: [ push, pull_request, workflow_dispatch ]
 
 jobs:
   job:
@@ -23,11 +23,7 @@ jobs:
         run: npm run build
 
       - name: Test
-        if: ${{ env.TEST != 'skip' }}
-        run: npm run test-authenticated
-        env:
-          DEBUG: scraper:*
-          LI_AT_COOKIE: ${{ secrets.LI_AT_COOKIE }}
+        run: npm test
 
       - name: Publish-Latest
         if: contains(github.ref, 'release') && matrix.node == '22' # Tag commit with 'release' to publish

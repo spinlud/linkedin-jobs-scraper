@@ -1,3 +1,4 @@
+import { describe, it, expect, jest, beforeAll } from "@jest/globals";
 import { IData } from "../scraper/events";
 import { IQuery, IQueryOptions } from "../scraper/query";
 import { killChromium } from "../utils/browser";
@@ -11,7 +12,11 @@ import {
     events,
 } from "../index";
 
-describe('[TEST]', () => {
+// Run only when a real LinkedIn session cookie is available; the suite is inert otherwise.
+const hasCredentials = Boolean(process.env.LI_AT_COOKIE);
+const describeAuthenticated = hasCredentials ? describe : describe.skip;
+
+describeAuthenticated('[TEST]', () => {
     jest.setTimeout(240000);
 
     const onDataFn = (data: IData): void => {
@@ -62,13 +67,17 @@ describe('[TEST]', () => {
         .replace(/[\s\n\r]+/g, " ")
         .trim();
 
-    const scraper = new LinkedinScraper({
-        headless: true,
-        args: [
-            "--remote-debugging-address=0.0.0.0",
-            "--remote-debugging-port=9222",
-        ],
-        slowMo: 250,
+    let scraper: LinkedinScraper;
+
+    beforeAll(() => {
+        scraper = new LinkedinScraper({
+            headless: true,
+            args: [
+                "--remote-debugging-address=0.0.0.0",
+                "--remote-debugging-port=9222",
+            ],
+            slowMo: 250,
+        });
     });
 
     const queriesSerial1: IQuery[] = [

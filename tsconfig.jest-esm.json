@@ -1,0 +1,15 @@
+{
+  /* Test-only config: emit ES modules so ts-jest can load the pure-ESM puppeteer chain. The library build keeps using tsconfig.json (CommonJS). */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler"
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "**/tmp",
+    "**/examples"
+  ]
+}

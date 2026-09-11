@@ -18,7 +18,8 @@
     "clean": "rm -fr build",
     "build": "npm run clean && tsc",
     "prepublishOnly": "npm run build",
-    "test-authenticated": "DEBUG=scraper:info jest authenticated.test.ts"
+    "test": "jest",
+    "test-authenticated": "DEBUG=scraper:info NODE_OPTIONS=--experimental-vm-modules jest --config jest.authenticated.config.js"
   },
   "repository": {
     "type": "git",

@@ -35,7 +35,6 @@ const TABLE_DEFAULT_FIELDS = [
     "place",
     "date",
     "salary",
-    "isEasyApply",
     "applicantCount",
     "benefits",
     "reposted",
@@ -46,6 +45,9 @@ const STRUCTURED_LIST_SEPARATOR = "|";
 
 const TABLE_COLUMN_SEPARATOR = "  ";
 const TABLE_MIN_COLUMN_WIDTH = 8;
+
+const INDEX_HEADER = "index";
+const INDEX_COLUMN_WIDTH = Math.max(INDEX_HEADER.length, 5);
 
 const WHITESPACE_RE = /\s+/g;
 
@@ -377,7 +379,8 @@ class TableWriter implements Writer {
         const columns = process.stdout.columns ?? 80;
         const fieldCount = this._fields.length;
         const separators = TABLE_COLUMN_SEPARATOR.length * Math.max(fieldCount - 1, 0);
-        const minimum = fieldCount * TABLE_MIN_COLUMN_WIDTH + separators;
+        const indexReserved = INDEX_COLUMN_WIDTH + TABLE_COLUMN_SEPARATOR.length;
+        const minimum = indexReserved + fieldCount * TABLE_MIN_COLUMN_WIDTH + separators;
 
         if (this._forcedVertical || columns < minimum) {
             this._vertical = true;
@@ -385,7 +388,7 @@ class TableWriter implements Writer {
         }
 
         this._vertical = false;
-        const available = Math.max(columns - separators, fieldCount);
+        const available = Math.max(columns - indexReserved - separators, fieldCount);
         const base = Math.floor(available / fieldCount);
         const remainder = available % fieldCount;
         this._widths = this._fields.map((_field, i) => base + (i < remainder ? 1 : 0));
@@ -409,12 +412,14 @@ class TableWriter implements Writer {
         if (this._vertical) {
             return;
         }
-        const header = this._fields
-            .map((name, i) => this._headerCell(name, this._widths[i]))
-            .join(TABLE_COLUMN_SEPARATOR);
-        const rule = this._widths
-            .map(width => "─".repeat(width))
-            .join(TABLE_COLUMN_SEPARATOR);
+        const header = [
+            this._headerCell(INDEX_HEADER, INDEX_COLUMN_WIDTH),
+            ...this._fields.map((name, i) => this._headerCell(name, this._widths[i])),
+        ].join(TABLE_COLUMN_SEPARATOR);
+        const rule = [
+            "─".repeat(INDEX_COLUMN_WIDTH),
+            ...this._widths.map(width => "─".repeat(width)),
+        ].join(TABLE_COLUMN_SEPARATOR);
         this._spinner.pause(() => {
             process.stdout.write(header + "\n");
             process.stdout.write(rule + "\n");
@@ -426,6 +431,7 @@ class TableWriter implements Writer {
         if (section !== this._currentSection) {
             this._currentSection = section;
             this._sectionJobCount = 0;
+            this._recordIndex = 0;
             this._beginSection();
         }
 
@@ -443,7 +449,7 @@ class TableWriter implements Writer {
     }
 
     private _writeRow(record: Record<string, PreparedValue>): void {
-        const cells: string[] = [];
+        const cells: string[] = [String(this._recordIndex).padStart(INDEX_COLUMN_WIDTH)];
         this._fields.forEach((name, i) => {
             const width = this._widths[i];
             const value = stringifyCell(record[name]);

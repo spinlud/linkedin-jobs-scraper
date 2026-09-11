@@ -23,6 +23,16 @@ const formatMetrics = (metrics: IMetrics): string =>
     `missed=${metrics.missed} skipped=${metrics.skipped} ` +
     `throttled=${metrics.throttled} pace=${metrics.pace}s`;
 
+// An all-zero snapshot for locations that produced no metrics, keeping rows and totals defined.
+const zeroMetrics = (): IMetrics => ({
+    processed: 0,
+    failed: 0,
+    missed: 0,
+    skipped: 0,
+    throttled: 0,
+    pace: 0,
+});
+
 /**
  * Renders scraper lifecycle events onto a diagnostics stream and records outcomes.
  *
@@ -34,6 +44,8 @@ export class Feedback {
     private _metrics: IMetrics | null = null;
     private _locationLabels: string[] = [];
     private _beginIndex = 0;
+    private _locationSummaries: Array<{ label: string | null; metrics: IMetrics | null }> = [];
+    private _currentLocation: string | null = null;
     public invalidSession = false;
     public notFound = false;
 
@@ -59,6 +71,11 @@ export class Feedback {
     private _row(label: string, value: string): string {
         const padded = label.padEnd(ANNOUNCE_LABEL_WIDTH);
         return "   " + this._color.dim(padded) + value;
+    }
+
+    private _rowPadded(label: string, padWidth: number, value: string): string {
+        const padded = label.padEnd(padWidth);
+        return "   " + this._color.dim(padded) + "  " + value;
     }
 
     private _title(text: string): string {
@@ -138,23 +155,35 @@ export class Feedback {
     }
 
     onBegin = (begin: IBegin): void => {
+        // Snapshot the finished location before advancing. This bookkeeping runs even under
+        // --quiet; only the printing below is gated.
+        if (this._currentLocation !== null) {
+            this._locationSummaries.push({
+                label: this._currentLocation,
+                metrics: this._metrics,
+            });
+            this._metrics = null;
+        }
+
+        let location: string | null = null;
+        if (this._beginIndex < this._locationLabels.length) {
+            location = this._locationLabels[this._beginIndex];
+        }
+        const sectionIndex = this._beginIndex;
+        this._beginIndex += 1;
+        this._currentLocation = location;
+
         if (this._quiet) {
             return;
         }
         // Margin before every section but the first.
-        if (this._beginIndex > 0) {
+        if (sectionIndex > 0) {
             this._println("");
         }
 
-        let location: string | undefined;
-        if (this._beginIndex < this._locationLabels.length) {
-            location = this._locationLabels[this._beginIndex];
-        }
-        this._beginIndex += 1;
-
         const count =
             begin.jobTotal < 0 ? "results: unknown total" : `~${begin.jobTotal} results`;
-        if (location !== undefined) {
+        if (location !== null) {
             this._println(
                 "📍 " + this._color.cyan(this._color.bold(location)) + "   " + count,
             );
@@ -165,11 +194,12 @@ export class Feedback {
     };
 
     onMetrics = (metrics: IMetrics): void => {
-        this._metrics = metrics;
+        // The emitted object is a shared reference mutated within a location, so retain a copy.
+        this._metrics = { ...metrics };
         if (this._quiet) {
             return;
         }
-        this._spinner.setLabel(formatMetrics(metrics));
+        this._spinner.setLabel(formatMetrics(this._metrics));
     };
 
     onError = (error: Error | string): void => {
@@ -196,16 +226,78 @@ export class Feedback {
 
     onEnd = (): void => {
         this._spinner.stop();
+
+        // Flush the final location. This bookkeeping runs even under --quiet.
+        if (this._currentLocation !== null) {
+            this._locationSummaries.push({
+                label: this._currentLocation,
+                metrics: this._metrics,
+            });
+        }
+
         if (this._quiet) {
             return;
         }
-        if (this._metrics !== null) {
-            this._println("done: " + formatMetrics(this._metrics));
+
+        if (this._locationSummaries.length <= 1) {
+            const metrics = this._locationSummaries[0]?.metrics ?? this._metrics;
+            if (metrics !== null && metrics !== undefined) {
+                this._println("done: " + formatMetrics(metrics));
+            } else {
+                this._println("done");
+            }
         } else {
-            this._println("done");
+            this._renderLocationSummary();
         }
         this._println("");
     };
+
+    private _formatLocationMetrics(metrics: IMetrics): string {
+        return (
+            `processed=${metrics.processed} failed=${metrics.failed} ` +
+            `missed=${metrics.missed} skipped=${metrics.skipped}`
+        );
+    }
+
+    /**
+     * Render one per-location statistics row per location plus a global `total` row. Per-location
+     * counts are summed; account-wide throttled/pace are carried from the last location that
+     * reported metrics rather than summed.
+     */
+    private _renderLocationSummary(): void {
+        this._println("done:");
+
+        const labels = this._locationSummaries.map(entry => entry.label ?? "");
+        const padWidth = Math.max("total".length, ...labels.map(label => label.length));
+
+        const total = zeroMetrics();
+        let lastReported: IMetrics | null = null;
+
+        for (const entry of this._locationSummaries) {
+            const metrics = entry.metrics ?? zeroMetrics();
+            this._println(
+                this._rowPadded(
+                    entry.label ?? "",
+                    padWidth,
+                    this._formatLocationMetrics(metrics),
+                ),
+            );
+            if (entry.metrics !== null) {
+                total.processed += entry.metrics.processed;
+                total.failed += entry.metrics.failed;
+                total.missed += entry.metrics.missed;
+                total.skipped += entry.metrics.skipped;
+                lastReported = entry.metrics;
+            }
+        }
+
+        if (lastReported !== null) {
+            total.throttled = lastReported.throttled;
+            total.pace = lastReported.pace;
+        }
+
+        this._println(this._rowPadded("total", padWidth, formatMetrics(total)));
+    }
 }
 
 /** Build the stderr Feedback, keying colour off stderr being a tty. */

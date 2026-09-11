@@ -30,7 +30,7 @@ const browserDefaults: ScraperOptions = {
     // @ts-ignore
     defaultViewport: null,
     pipe: true,
-    slowMo: 150,
+    slowMo: 20,
 };
 
 const queryOptionsDefault: IQueryOptions = {

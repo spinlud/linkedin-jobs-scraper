@@ -105,7 +105,7 @@ export class Feedback {
     private _formatDriver(config: CliConfig): string {
         const parts = [
             `headless=${onOff(!config.noHeadless)}`,
-            `slow-mo=${config.baseDelay}s`,
+            `base-delay=${config.baseDelay}s`,
             `adaptive=${onOff(!config.noAdaptive)}`,
         ];
         if (config.chromeUserDataDir) {

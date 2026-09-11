@@ -1,6 +1,6 @@
 import deepmerge from 'deepmerge';
 import puppeteer from 'puppeteer';
-import { Browser, BrowserContext, HTTPRequest } from 'puppeteer';
+import { Browser, BrowserContext, HTTPRequest, Page } from 'puppeteer';
 import { events, IEventListeners } from './events';
 import { states } from './states';
 import { browserDefaults, queryOptionsDefault } from './defaults';
@@ -275,114 +275,124 @@ class LinkedinScraper extends Scraper {
                 logger.info(tag, `Starting new query:`, `query="${query.query}"`, `location="${locationTag}"`);
                 logger.info(tag, `Query options`, query.options);
 
-                // Open new page in incognito context
+                // Open a fresh page in the default browser context for this location
                 const page = await this._browser!.newPage();
 
-                // Create Chrome Developer Tools session
-                const cdpSession = await page.createCDPSession();
+                try {
+                    // Create Chrome Developer Tools session
+                    const cdpSession = await page.createCDPSession();
 
-                // Disable Content Security Policy: needed for pagination to work properly in anonymous mode
-                await page.setBypassCSP(true);
+                    // Disable Content Security Policy: needed for pagination to work properly in anonymous mode
+                    await page.setBypassCSP(true);
 
-                // Tricks to speed up page
-                await cdpSession.send('Page.enable');
-                await cdpSession.send('Page.setWebLifecycleState', {
-                    state: 'active',
-                });
+                    // Tricks to speed up page
+                    await cdpSession.send('Page.enable');
+                    await cdpSession.send('Page.setWebLifecycleState', {
+                        state: 'active',
+                    });
 
-                // Enable request interception
-                await page.setRequestInterception(true);
+                    // Enable request interception
+                    await page.setRequestInterception(true);
 
-                const onRequest = async (request: HTTPRequest) => {
-                    const url = new URL(request.url());
-                    const domain = url.hostname.split(".").slice(-2).join(".").toLowerCase();
+                    const onRequest = async (request: HTTPRequest) => {
+                        const url = new URL(request.url());
+                        const domain = url.hostname.split(".").slice(-2).join(".").toLowerCase();
 
-                    // Block tracking and other stuff not useful
-                    const toBlock = [
-                        'li/track',
-                        'realtime.www.linkedin.com/realtime',
-                        'platform.linkedin.com/litms',
-                        'linkedin.com/sensorCollect',
-                        'linkedin.com/pixel/tracking',
-                    ];
-
-                    if (toBlock.some(e => url.pathname.includes(e))) {
-                        return request.abort();
-                    }
-
-                    // Block 3rd part domains requests
-                    if (!["linkedin.com", "licdn.com"].includes(domain)) {
-                        return request.abort();
-                    }
-
-                    // If optimization is enabled, block other resource types
-                    if (query.options!.optimize) {
-                        const resourcesToBlock = [
-                            "image",
-                            "stylesheet",
-                            "media",
-                            "font",
-                            "imageset",
+                        // Block tracking and other stuff not useful
+                        const toBlock = [
+                            'li/track',
+                            'realtime.www.linkedin.com/realtime',
+                            'platform.linkedin.com/litms',
+                            'linkedin.com/sensorCollect',
+                            'linkedin.com/pixel/tracking',
                         ];
 
-                        if (
-                            resourcesToBlock.some(r => request.resourceType() === r)
-                            || request.url().includes(".jpg")
-                            || request.url().includes(".jpeg")
-                            || request.url().includes(".png")
-                            || request.url().includes(".gif")
-                            || request.url().includes(".css")
-                        ) {
+                        if (toBlock.some(e => url.pathname.includes(e))) {
                             return request.abort();
                         }
-                    }
 
-                    await request.continue();
-                }
-
-                // Add listener
-                page.on("request", onRequest);
-
-                // Error response and rate limiting check
-                page.on("response",  response => {
-                    if (response.status() === THROTTLED_STATUS) {
-                        // Navigation 429s are handled by the open-and-wait backoff ladder, which
-                        // reports them to the pacer itself; only same-origin resource/XHR refusals
-                        // (job detail fetches) are reported here, so neither is counted twice.
-                        const request = response.request();
-
-                        if (!request.isNavigationRequest() && LinkedinScraper._isSameOriginLinkedIn(response.url())) {
-                            this.pacer.throttled();
+                        // Block 3rd part domains requests
+                        if (!["linkedin.com", "licdn.com"].includes(domain)) {
+                            return request.abort();
                         }
 
-                        logger.warn(tag, "Error 429 too many requests. You would probably need to use a higher 'pacing.baseDelay' value and/or reduce the number of concurrent queries.");
+                        // If optimization is enabled, block other resource types
+                        if (query.options!.optimize) {
+                            const resourcesToBlock = [
+                                "image",
+                                "stylesheet",
+                                "media",
+                                "font",
+                                "imageset",
+                            ];
+
+                            if (
+                                resourcesToBlock.some(r => request.resourceType() === r)
+                                || request.url().includes(".jpg")
+                                || request.url().includes(".jpeg")
+                                || request.url().includes(".png")
+                                || request.url().includes(".gif")
+                                || request.url().includes(".css")
+                            ) {
+                                return request.abort();
+                            }
+                        }
+
+                        await request.continue();
                     }
-                    else if (response.status() >= 400) {
-                        logger.warn(tag, response.status(), `Error for request ${response.request().url()}`)
+
+                    // Add listener
+                    page.on("request", onRequest);
+
+                    // Error response and rate limiting check
+                    page.on("response",  response => {
+                        if (response.status() === THROTTLED_STATUS) {
+                            // Navigation 429s are handled by the open-and-wait backoff ladder, which
+                            // reports them to the pacer itself; only same-origin resource/XHR refusals
+                            // (job detail fetches) are reported here, so neither is counted twice.
+                            const request = response.request();
+
+                            if (!request.isNavigationRequest() && LinkedinScraper._isSameOriginLinkedIn(response.url())) {
+                                this.pacer.throttled();
+                            }
+
+                            logger.warn(tag, "Error 429 too many requests. You would probably need to use a higher 'pacing.baseDelay' value and/or reduce the number of concurrent queries.");
+                        }
+                        else if (response.status() >= 400) {
+                            logger.warn(tag, response.status(), `Error for request ${response.request().url()}`)
+                        }
+                    });
+
+                    // Build search url
+                    const searchUrl = this._buildSearchUrl(query.query || "", location, query.options!);
+
+                    // Run strategy
+                    const runStrategyResult = await this._runStrategy.run(
+                        this._browser!,
+                        page,
+                        cdpSession,
+                        searchUrl,
+                        query,
+                        locationTag,
+                    );
+
+                    // Check if forced exit is required
+                    if (runStrategyResult.exit) {
+                        logger.warn(tag, "Forced termination");
+                        return;
                     }
-                });
-
-                // Build search url
-                const searchUrl = this._buildSearchUrl(query.query || "", location, query.options!);
-
-                // Run strategy
-                const runStrategyResult = await this._runStrategy.run(
-                    this._browser!,
-                    page,
-                    cdpSession,
-                    searchUrl,
-                    query,
-                    locationTag,
-                );
-
-                // Check if forced exit is required
-                if (runStrategyResult.exit) {
-                    logger.warn(tag, "Forced termination");
-                    return;
                 }
-
-                // Close page
-                page && await page.close();
+                finally {
+                    // Close the per-location page on every exit path (forced exit, error, normal end)
+                    if (page) {
+                        try {
+                            await page.close();
+                        }
+                        catch {
+                            // Best effort
+                        }
+                    }
+                }
             }
         }
 
@@ -410,11 +420,33 @@ class LinkedinScraper extends Scraper {
             return;
         }
 
-        const cookies = await this._browser.cookies();
-        const liAtCookie = cookies.find(cookie => cookie.name === SESSION_COOKIE_NAME);
+        // Best-effort read: the CDP cookies call can intermittently fail, and a completed scrape
+        // must not be reported as failed just because the session cookie could not be surfaced.
+        let page: Page | undefined;
 
-        if (liAtCookie && liAtCookie.value && liAtCookie.value !== initialLiAt) {
-            this.emit(events.scraper.sessionRefreshed, { liAt: liAtCookie.value });
+        try {
+            // A live page gives Chrome a target to resolve the default context's cookies against
+            page = await this._browser.newPage();
+            const cookies = await this._browser.cookies();
+            const liAtCookie = cookies.find(cookie => cookie.name === SESSION_COOKIE_NAME);
+
+            if (liAtCookie && liAtCookie.value && liAtCookie.value !== initialLiAt) {
+                this.emit(events.scraper.sessionRefreshed, { liAt: liAtCookie.value });
+            }
+        }
+        catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.warn("Could not read session cookie at end of run; skipping sessionRefreshed:", message);
+        }
+        finally {
+            if (page) {
+                try {
+                    await page.close();
+                }
+                catch {
+                    // Best effort
+                }
+            }
         }
     };
 

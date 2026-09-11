@@ -66,3 +66,56 @@ export const baseSalaryFilter = {
     SALARY_180K: '8',
     SALARY_200K: '9',
 };
+
+export const jobFunctionFilter = {
+    ACCOUNTING_AUDITING: "acct",
+    ADMINISTRATIVE: "adm",
+    ADVERTISING: "advr",
+    BUSINESS_DEVELOPMENT: "bd",
+    CONSULTING: "cnsl",
+    DISTRIBUTION: "dist",
+    DESIGN: "dsgn",
+    EDUCATION: "edu",
+    ENGINEERING: "eng",
+    FINANCE: "fin",
+    GENERAL_BUSINESS: "genb",
+    HEALTH_CARE_PROVIDER: "hcpr",
+    HUMAN_RESOURCES: "hr",
+    INFORMATION_TECHNOLOGY: "it",
+    LEGAL: "lgl",
+    MANAGEMENT: "mgmt",
+    MANUFACTURING: "mnfc",
+    MARKETING: "mrkt",
+    OTHER: "othr",
+    PUBLIC_RELATIONS: "pr",
+    PRODUCT_MANAGEMENT: "prdm",
+    PROJECT_MANAGEMENT: "prjm",
+    QUALITY_ASSURANCE: "qa",
+    RESEARCH: "rsch",
+    SALES: "sale",
+    SUPPLY_CHAIN: "supl",
+    TRAINING: "trng",
+};
+
+export const benefitsFilter = {
+    MEDICAL: "1",
+    VISION: "2",
+    DENTAL: "3",
+    RETIREMENT_401K: "4",
+    PENSION_PLAN: "5",
+    // NOTE: LinkedIn skips "6" in its own numbering — intentional gap, not an omission.
+    PAID_MATERNITY_LEAVE: "7",
+    PAID_PATERNITY_LEAVE: "8",
+    COMMUTER_BENEFITS: "9",
+    STUDENT_LOAN_ASSISTANCE: "10",
+    TUITION_ASSISTANCE: "11",
+    DISABILITY_INSURANCE: "12",
+};
+
+export const commitmentsFilter = {
+    DIVERSITY_EQUITY_INCLUSION: "1",
+    ENVIRONMENTAL_SUSTAINABILITY: "2",
+    WORK_LIFE_BALANCE: "3",
+    SOCIAL_IMPACT: "4",
+    CAREER_GROWTH_AND_LEARNING: "5",
+};

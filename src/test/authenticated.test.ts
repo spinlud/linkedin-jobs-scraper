@@ -1,3 +1,4 @@
+import { describe, it, expect, jest, beforeAll } from "@jest/globals";
 import { IData } from "../scraper/events";
 import { IQuery, IQueryOptions } from "../scraper/query";
 import { killChromium } from "../utils/browser";
@@ -11,7 +12,11 @@ import {
     events,
 } from "../index";
 
-describe('[TEST]', () => {
+// Run only when a real LinkedIn session cookie is available; the suite is inert otherwise.
+const hasCredentials = Boolean(process.env.LI_AT_COOKIE);
+const describeAuthenticated = hasCredentials ? describe : describe.skip;
+
+describeAuthenticated('[TEST]', () => {
     jest.setTimeout(240000);
 
     const onDataFn = (data: IData): void => {
@@ -37,8 +42,8 @@ describe('[TEST]', () => {
             expect(Array.isArray(data.insights)).toBe(true);
         }
 
-        if (data.skills) {
-            expect(Array.isArray(data.skills)).toBe(true);
+        if (data.benefits) {
+            expect(Array.isArray(data.benefits)).toBe(true);
         }
 
         expect(() => new URL(data.link)).not.toThrow();
@@ -62,13 +67,17 @@ describe('[TEST]', () => {
         .replace(/[\s\n\r]+/g, " ")
         .trim();
 
-    const scraper = new LinkedinScraper({
-        headless: true,
-        args: [
-            "--remote-debugging-address=0.0.0.0",
-            "--remote-debugging-port=9222",
-        ],
-        slowMo: 250,
+    let scraper: LinkedinScraper;
+
+    beforeAll(() => {
+        scraper = new LinkedinScraper({
+            headless: true,
+            args: [
+                "--remote-debugging-address=0.0.0.0",
+                "--remote-debugging-port=9222",
+            ],
+            slowMo: 250,
+        });
     });
 
     const queriesSerial1: IQuery[] = [
@@ -79,7 +88,6 @@ describe('[TEST]', () => {
                     companyJobsUrl: "https://www.linkedin.com/jobs/search/?f_C=1441%2C10667&geoId=101165590&keywords=engineer&location=United%20Kingdom",
                     experience: [experienceLevelFilter.MID_SENIOR, experienceLevelFilter.DIRECTOR],
                 },
-                skills: true,
             }
         },
         {

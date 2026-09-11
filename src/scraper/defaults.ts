@@ -30,7 +30,7 @@ const browserDefaults: ScraperOptions = {
     // @ts-ignore
     defaultViewport: null,
     pipe: true,
-    slowMo: 150,
+    slowMo: 20,
 };
 
 const queryOptionsDefault: IQueryOptions = {
@@ -40,7 +40,6 @@ const queryOptionsDefault: IQueryOptions = {
     optimize: false,
     applyLink: false,
     skipPromotedJobs: false,
-    skills: false,
 };
 
 export { browserDefaults, queryOptionsDefault };

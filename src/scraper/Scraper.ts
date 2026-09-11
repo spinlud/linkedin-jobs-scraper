@@ -3,12 +3,22 @@ import TypedEmitter from "typed-emitter";
 import { IEventListeners } from "./events";
 import { LaunchOptions, ConnectOptions } from "puppeteer";
 import { IQuery, IQueryOptions } from "./query";
+import { AuthConfig } from "./auth";
+import { CallbackException } from "./exceptions";
+import { Pacer, IPacingOptions, createPacer } from "./Pacer";
 import { logger } from "../logger/logger";
 
-export type ScraperOptions = LaunchOptions & ConnectOptions;
+// `pacing` is named to avoid colliding with Puppeteer's own LaunchOptions.slowMo, which is ms
+// of DevTools-op delay, a different concept.
+export type ScraperOptions = LaunchOptions & ConnectOptions & { auth?: AuthConfig; pacing?: IPacingOptions };
 
 export abstract class Scraper extends (EventEmitter as new () => TypedEmitter<IEventListeners>) {
     public options: ScraperOptions;
+
+    // The delay every sleep site of a run reads. One instance is shared by every sequential
+    // location of a run, since LinkedIn enforces its rate limit per account; it is rebuilt on a
+    // fresh run.
+    public pacer: Pacer;
 
     /**
      * @constructor
@@ -17,6 +27,30 @@ export abstract class Scraper extends (EventEmitter as new () => TypedEmitter<IE
     protected constructor(options: ScraperOptions) {
         super();
         this.options = options;
+        this.pacer = createPacer(options.pacing);
+    }
+
+    /**
+     * Emit an event, wrapping any error thrown by a listener so it propagates as a
+     * CallbackException rather than corrupting the run.
+     * @param {E} event
+     * @param {...Parameters<IEventListeners[E]>} args
+     * @returns {boolean}
+     */
+    public emit<E extends keyof IEventListeners>(
+        event: E,
+        ...args: Parameters<IEventListeners[E]>
+    ): boolean {
+        try {
+            return super.emit(event, ...args);
+        }
+        catch (err) {
+            if (err instanceof CallbackException) {
+                throw err;
+            }
+
+            throw new CallbackException(err instanceof Error ? err.message : String(err));
+        }
     }
 
     /**

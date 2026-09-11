@@ -1,40 +1,39 @@
 name: ci
-on: [ push, workflow_dispatch ]
+on: [ push, pull_request, workflow_dispatch ]
 
 jobs:
   job:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [ 20, 22 ]
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Setup node
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v4
         with:
-          node-version: '16'
+          node-version: ${{ matrix.node }}
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build
         run: npm run build
 
       - name: Test
-        if: ${{ env.TEST != 'skip' }}
-        run: npm run test-authenticated
-        env:
-          DEBUG: scraper:*
-          LI_AT_COOKIE: ${{ secrets.LI_AT_COOKIE }}
+        run: npm test
 
       - name: Publish-Latest
-#        if: contains(github.ref, 'release') # Tag commit with 'release' to publish
+        if: contains(github.ref, 'release') && matrix.node == '22' # Tag commit with 'release' to publish
         run: |
           npm set registry "https://registry.npmjs.org"
           npm set //registry.npmjs.org/:_authToken ${{ secrets.NPM_PUBLISH_TOKEN }}
           npm publish --tag latest
 
       - name: Publish-Next
-        if: contains(github.ref, 'next') # Tag commit with 'next' to publish
+        if: contains(github.ref, 'next') && matrix.node == '22' # Tag commit with 'next' to publish
         run: |
           npm set registry "https://registry.npmjs.org"
           npm set //registry.npmjs.org/:_authToken ${{ secrets.NPM_PUBLISH_TOKEN }}

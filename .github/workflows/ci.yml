@@ -4,9 +4,6 @@ on: [ push, pull_request, workflow_dispatch ]
 jobs:
   job:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write # Required for npm Trusted Publishing (OIDC)
     strategy:
       matrix:
         node: [ 20, 22 ]
@@ -27,15 +24,3 @@ jobs:
 
       - name: Test
         run: npm test
-
-      - name: Publish-Latest
-        if: contains(github.ref, 'release') && matrix.node == '22' # Tag commit with 'release' to publish
-        run: |
-          npm install -g npm@latest # Trusted Publishing (OIDC) requires npm >= 11.5.1
-          npm publish --tag latest
-
-      - name: Publish-Next
-        if: contains(github.ref, 'next') && matrix.node == '22' # Tag commit with 'next' to publish
-        run: |
-          npm install -g npm@latest # Trusted Publishing (OIDC) requires npm >= 11.5.1
-          npm publish --tag next

@@ -5,6 +5,8 @@
 **/build
 **/*.tgz
 
+.claude/worktrees
+
 # General
 .DS_Store
 .AppleDouble
